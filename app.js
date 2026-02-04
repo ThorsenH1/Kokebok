@@ -154,6 +154,20 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Get category name from ID
+function getCategoryName(categoryId) {
+    if (!categoryId) return 'Ukategorisert';
+    const category = state.categories.find(c => c.id === categoryId);
+    return category ? category.name : categoryId;
+}
+
+// Get category icon from ID
+function getCategoryIcon(categoryId) {
+    if (!categoryId) return '📝';
+    const category = state.categories.find(c => c.id === categoryId);
+    return category?.icon || '📝';
+}
+
 // ===== Firestore Helpers =====
 function userDoc(collection) {
     if (!state.user) {
@@ -1381,8 +1395,11 @@ function renderBookView() {
             <button class="book-action-btn" id="openDigitalBookBtn">
                 <span>📖</span> Les som digital bok
             </button>
+            <button class="book-action-btn" id="addExistingRecipeBtn">
+                <span>📝</span> Legg til eksisterende
+            </button>
             <button class="book-action-btn" id="addRecipeToBookBtn">
-                <span>➕</span> Legg til oppskrift
+                <span>➕</span> Ny oppskrift
             </button>
         </div>
         
@@ -1405,7 +1422,12 @@ function renderBookView() {
         navigateTo('digitalBookView');
     });
     
-    // Add recipe button
+    // Add existing recipe button
+    on($('addExistingRecipeBtn'), 'click', () => {
+        openAddRecipesToBook(book.id);
+    });
+    
+    // Add new recipe button
     on($('addRecipeToBookBtn'), 'click', () => {
         openRecipeEditor();
         setTimeout(() => {
@@ -5210,8 +5232,14 @@ function findRecipesWithIngredients() {
     
     // Find matching recipes
     const matches = state.recipes.map(recipe => {
-        const recipeIngredients = (recipe.ingredients || []).map(i => 
-            (i.name || i).toLowerCase()
+        // Handle both array and string ingredients
+        let ingredientsArray = recipe.ingredients || [];
+        if (typeof ingredientsArray === 'string') {
+            ingredientsArray = ingredientsArray.split('\n').filter(i => i.trim());
+        }
+        
+        const recipeIngredients = ingredientsArray.map(i => 
+            (typeof i === 'object' ? i.name : i || '').toLowerCase()
         );
         
         let matchCount = 0;
@@ -6120,7 +6148,7 @@ function switchCalcTab(tabId) {
     document.querySelectorAll('.calc-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.calc-content').forEach(c => c.classList.remove('active'));
     
-    document.querySelector(\`.calc-tab[onclick*="\${tabId}"]\`).classList.add('active');
+    document.querySelector(`.calc-tab[onclick*="${tabId}"]`).classList.add('active');
     document.getElementById(tabId + 'Tab')?.classList.add('active');
 }
 window.switchCalcTab = switchCalcTab;
@@ -6235,9 +6263,9 @@ function calcProduceFromGram() {
     $('produceAmount').textContent = amount.toFixed(1);
     $('produceUnit').textContent = produce.unit;
     
-    $('produceInfo').innerHTML = \`
+    $('produceInfo').innerHTML = `
         <p class="produce-avg">💡 Gjennomsnittlig vekt: ${produce.avgWeight}g per ${produce.unit}</p>
-    \`;
+    `;
 }
 window.calcProduceFromGram = calcProduceFromGram;
 
@@ -6251,9 +6279,9 @@ function updateProduceCalc() {
     
     const produce = measurementData.produce[produceName];
     $('produceUnit').textContent = produce.unit;
-    $('produceInfo').innerHTML = \`
+    $('produceInfo').innerHTML = `
         <p class="produce-avg">💡 1 ${produce.unit} ${produceName} veier ca. ${produce.avgWeight}g</p>
-    \`;
+    `;
     
     calcProduceFromGram();
 }
@@ -6294,7 +6322,23 @@ const aiMealPreferences = {
 };
 
 function openAiMealPlanner() {
-    const html = \`
+    const dietaryOptions = aiMealPreferences.dietary.map(d => 
+        `<option value="${d}">${d.charAt(0).toUpperCase() + d.slice(1)}</option>`
+    ).join('');
+    
+    const goalsOptions = aiMealPreferences.goals.map(g => 
+        `<option value="${g}">${g.charAt(0).toUpperCase() + g.slice(1).replace('-', ' ')}</option>`
+    ).join('');
+    
+    const budgetOptions = aiMealPreferences.budgets.map(b => 
+        `<option value="${b}">${b.charAt(0).toUpperCase() + b.slice(1)}</option>`
+    ).join('');
+    
+    const cookingOptions = aiMealPreferences.cooking.map(c => 
+        `<option value="${c}">${c}</option>`
+    ).join('');
+    
+    const html = `
         <div class="ai-meal-planner">
             <div class="ai-header">
                 <span class="ai-icon">🤖✨</span>
@@ -6306,34 +6350,34 @@ function openAiMealPlanner() {
                 <div class="option-section">
                     <label>🥗 Kosthold</label>
                     <select id="aiDietary">
-                        ${aiMealPreferences.dietary.map(d => \`<option value="\${d}">\${d.charAt(0).toUpperCase() + d.slice(1)}</option>\`).join('')}
+                        ${dietaryOptions}
                     </select>
                 </div>
                 
                 <div class="option-section">
                     <label>🎯 Mål</label>
                     <select id="aiGoal">
-                        ${aiMealPreferences.goals.map(g => \`<option value="\${g}">\${g.charAt(0).toUpperCase() + g.slice(1).replace('-', ' ')}</option>\`).join('')}
+                        ${goalsOptions}
                     </select>
                 </div>
                 
                 <div class="option-section">
                     <label>💰 Budsjett</label>
                     <select id="aiBudget">
-                        ${aiMealPreferences.budgets.map(b => \`<option value="\${b}">\${b.charAt(0).toUpperCase() + b.slice(1)}</option>\`).join('')}
+                        ${budgetOptions}
                     </select>
                 </div>
                 
                 <div class="option-section">
                     <label>⏱️ Koketid</label>
                     <select id="aiCookTime">
-                        ${aiMealPreferences.cooking.map(c => \`<option value="\${c}">\${c}</option>\`).join('')}
+                        ${cookingOptions}
                     </select>
                 </div>
                 
                 <div class="option-section">
                     <label>👥 Antall personer</label>
-                    <input type="number" id="aiPersons" min="1" max="12" value="${state.settings.householdSize || 2}">
+                    <input type="number" id="aiPersons" min="1" max="12" value="${state.settings?.householdSize || 2}">
                 </div>
                 
                 <div class="option-section">
@@ -6383,7 +6427,7 @@ function openAiMealPlanner() {
             
             <div id="aiMealPlanResult"></div>
         </div>
-    \`;
+    `;
     
     showModal('🤖 AI Ukemenyplanlegger', html, []);
 }
@@ -6403,7 +6447,7 @@ function generateAiMealPlan(surprise = false) {
     const seasonal = $('aiSeasonal')?.checked;
     
     // Show loading
-    $('aiMealPlanResult').innerHTML = \`
+    $('aiMealPlanResult').innerHTML = `
         <div class="ai-loading">
             <div class="ai-thinking">
                 <span class="thinking-dot"></span>
@@ -6412,7 +6456,7 @@ function generateAiMealPlan(surprise = false) {
             </div>
             <p>AI tenker på den perfekte ukemenyen for deg...</p>
         </div>
-    \`;
+    `;
     
     // Simulate AI processing
     setTimeout(() => {
@@ -6583,7 +6627,46 @@ function shuffleArray(array) {
 function displayAiMealPlan(plan, days, persons) {
     const totalCost = plan.reduce((sum, day) => sum + day.estimatedCost, 0) * (persons / 4);
     
-    const resultHtml = \`
+    const planCards = plan.map((day, i) => {
+        const isWeekend = day.isWeekend;
+        const weekendClass = isWeekend ? 'weekend' : '';
+        const weekendBadge = isWeekend ? '<span class="weekend-badge">🌟</span>' : '';
+        
+        let contentHtml = '';
+        let viewBtnHtml = '';
+        
+        if (day.recipe.id) {
+            contentHtml = `
+                <span class="ai-recipe-name">${escapeHtml(day.recipe.name)}</span>
+                <div class="ai-recipe-meta">
+                    <span>⏱️ ${day.prepTime}</span>
+                    <span>💰 ~${day.estimatedCost} kr</span>
+                </div>
+            `;
+            viewBtnHtml = `
+                <button class="ai-view-btn" onclick="viewRecipe('${day.recipe.id}'); closeGenericModal();">
+                    Se oppskrift →
+                </button>
+            `;
+        } else {
+            contentHtml = `<span class="ai-no-recipe">Ingen oppskrift</span>`;
+        }
+        
+        return `
+            <div class="ai-day-card ${weekendClass}">
+                <div class="ai-day-header">
+                    <span class="day-name">${day.day}</span>
+                    ${weekendBadge}
+                </div>
+                <div class="ai-day-content">
+                    ${contentHtml}
+                </div>
+                ${viewBtnHtml}
+            </div>
+        `;
+    }).join('');
+    
+    const resultHtml = `
         <div class="ai-result">
             <div class="ai-result-header">
                 <h4>✨ Din personlige ukesmeny</h4>
@@ -6595,30 +6678,7 @@ function displayAiMealPlan(plan, days, persons) {
             </div>
             
             <div class="ai-plan-grid">
-                ${plan.map((day, i) => \`
-                    <div class="ai-day-card \${day.isWeekend ? 'weekend' : ''}">
-                        <div class="ai-day-header">
-                            <span class="day-name">\${day.day}</span>
-                            ${day.isWeekend ? '<span class="weekend-badge">🌟</span>' : ''}
-                        </div>
-                        <div class="ai-day-content">
-                            ${day.recipe.id ? \`
-                                <span class="ai-recipe-name">\${escapeHtml(day.recipe.name)}</span>
-                                <div class="ai-recipe-meta">
-                                    <span>⏱️ \${day.prepTime}</span>
-                                    <span>💰 ~\${day.estimatedCost} kr</span>
-                                </div>
-                            \` : \`
-                                <span class="ai-no-recipe">Ingen oppskrift</span>
-                            \`}
-                        </div>
-                        ${day.recipe.id ? \`
-                            <button class="ai-view-btn" onclick="viewRecipe('\${day.recipe.id}'); closeGenericModal();">
-                                Se oppskrift →
-                            </button>
-                        \` : ''}
-                    </div>
-                \`).join('')}
+                ${planCards}
             </div>
             
             <div class="ai-actions-bottom">
@@ -6633,7 +6693,7 @@ function displayAiMealPlan(plan, days, persons) {
                 </button>
             </div>
         </div>
-    \`;
+    `;
     
     $('aiMealPlanResult').innerHTML = resultHtml;
     
@@ -6698,38 +6758,54 @@ function openCookingDiary() {
     const byMonth = {};
     history.forEach(entry => {
         const date = new Date(entry.date);
-        const monthKey = \`\${date.getFullYear()}-\${String(date.getMonth() + 1).padStart(2, '0')}\`;
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         if (!byMonth[monthKey]) byMonth[monthKey] = [];
         byMonth[monthKey].push(entry);
     });
     
     const currentMonth = new Date().toISOString().slice(0, 7);
     
-    const html = \`
+    const recentMealsHtml = history.slice(0, 10).map(entry => {
+        const recipe = state.recipes.find(r => r.id === entry.recipeId);
+        const date = new Date(entry.date);
+        const dateStr = date.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' });
+        const recipeName = recipe ? escapeHtml(recipe.name) : 'Ukjent oppskrift';
+        const viewBtn = recipe ? `<button class="btn-sm" onclick="viewRecipe('${recipe.id}'); closeGenericModal();">Se</button>` : '';
+        
+        return `
+            <div class="recent-meal-item">
+                <span class="meal-date">${dateStr}</span>
+                <span class="meal-name">${recipeName}</span>
+                ${viewBtn}
+            </div>
+        `;
+    }).join('');
+    
+    const html = `
         <div class="cooking-diary">
             <div class="diary-header">
                 <button class="btn-icon" onclick="changeCalendarMonth(-1)">◀</button>
-                <h3 id="diaryMonthTitle">\${formatMonthYear(currentMonth)}</h3>
+                <h3 id="diaryMonthTitle">${formatMonthYear(currentMonth)}</h3>
                 <button class="btn-icon" onclick="changeCalendarMonth(1)">▶</button>
             </div>
             
             <div id="diaryCalendar" class="diary-calendar">
-                \${renderDiaryCalendar(currentMonth, history)}
+                ${renderDiaryCalendar(currentMonth, history)}
             </div>
             
             <div class="diary-stats">
                 <h4>📊 Statistikk</h4>
                 <div class="diary-stat-grid">
                     <div class="diary-stat">
-                        <span class="stat-value">\${history.length}</span>
+                        <span class="stat-value">${history.length}</span>
                         <span class="stat-label">Måltider laget</span>
                     </div>
                     <div class="diary-stat">
-                        <span class="stat-value">\${new Set(history.map(h => h.recipeId)).size}</span>
+                        <span class="stat-value">${new Set(history.map(h => h.recipeId)).size}</span>
                         <span class="stat-label">Unike oppskrifter</span>
                     </div>
                     <div class="diary-stat">
-                        <span class="stat-value">\${Object.keys(byMonth).length}</span>
+                        <span class="stat-value">${Object.keys(byMonth).length}</span>
                         <span class="stat-label">Måneder med data</span>
                     </div>
                 </div>
@@ -6738,21 +6814,11 @@ function openCookingDiary() {
             <div class="diary-recent">
                 <h4>🕐 Siste måltider</h4>
                 <div class="recent-meals-list">
-                    \${history.slice(0, 10).map(entry => {
-                        const recipe = state.recipes.find(r => r.id === entry.recipeId);
-                        const date = new Date(entry.date);
-                        return \`
-                            <div class="recent-meal-item">
-                                <span class="meal-date">\${date.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })}</span>
-                                <span class="meal-name">\${recipe ? escapeHtml(recipe.name) : 'Ukjent oppskrift'}</span>
-                                \${recipe ? \`<button class="btn-sm" onclick="viewRecipe('\${recipe.id}'); closeGenericModal();">Se</button>\` : ''}
-                            </div>
-                        \`;
-                    }).join('')}
+                    ${recentMealsHtml}
                 </div>
             </div>
         </div>
-    \`;
+    `;
     
     showModal('📅 Matkalender', html, []);
     
@@ -6782,7 +6848,7 @@ function renderDiaryCalendar(monthKey, history) {
     
     let html = '<div class="calendar-header">';
     ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'].forEach(day => {
-        html += \`<span class="cal-day-name">\${day}</span>\`;
+        html += `<span class="cal-day-name">${day}</span>`;
     });
     html += '</div><div class="calendar-grid">';
     
@@ -6797,14 +6863,14 @@ function renderDiaryCalendar(monthKey, history) {
         const meals = monthMeals[day] || [];
         const hasMeals = meals.length > 0;
         
-        html += \`
-            <div class="cal-day \${isToday ? 'today' : ''} \${hasMeals ? 'has-meals' : ''}" 
-                 onclick="showDayMeals(\${year}, \${month}, \${day})"
-                 title="\${hasMeals ? meals.length + ' måltid(er)' : 'Ingen måltider'}">
-                <span class="day-number">\${day}</span>
-                \${hasMeals ? \`<span class="meal-dot">\${meals.length}</span>\` : ''}
+        html += `
+            <div class="cal-day ${isToday ? 'today' : ''} ${hasMeals ? 'has-meals' : ''}" 
+                 onclick="showDayMeals(${year}, ${month}, ${day})"
+                 title="${hasMeals ? meals.length + ' måltid(er)' : 'Ingen måltider'}">
+                <span class="day-number">${day}</span>
+                ${hasMeals ? `<span class="meal-dot">${meals.length}</span>` : ''}
             </div>
-        \`;
+        `;
     }
     
     html += '</div>';
@@ -6815,7 +6881,7 @@ function formatMonthYear(monthKey) {
     const [year, month] = monthKey.split('-');
     const months = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 
                     'Juli', 'August', 'September', 'Oktober', 'November', 'Desember'];
-    return \`\${months[parseInt(month) - 1]} \${year}\`;
+    return `${months[parseInt(month) - 1]} ${year}`;
 }
 
 function changeCalendarMonth(delta) {
@@ -6847,17 +6913,19 @@ function showDayMeals(year, month, day) {
     
     const mealsHtml = dayMeals.map(entry => {
         const recipe = state.recipes.find(r => r.id === entry.recipeId);
-        return \`
+        const recipeName = recipe ? escapeHtml(recipe.name) : 'Ukjent oppskrift';
+        const viewBtn = recipe ? `<button class="btn btn-sm" onclick="viewRecipe('${recipe.id}'); closeGenericModal();">Se oppskrift</button>` : '';
+        return `
             <div class="day-meal-card">
                 <span class="meal-icon">🍽️</span>
-                <span class="meal-name">\${recipe ? escapeHtml(recipe.name) : 'Ukjent oppskrift'}</span>
-                \${recipe ? \`<button class="btn btn-sm" onclick="viewRecipe('\${recipe.id}'); closeGenericModal();">Se oppskrift</button>\` : ''}
+                <span class="meal-name">${recipeName}</span>
+                ${viewBtn}
             </div>
-        \`;
+        `;
     }).join('');
     
     // Show in a sub-modal or toast
-    showModal(\`📅 \${dateStr}\`, \`<div class="day-meals-detail">\${mealsHtml}</div>\`, []);
+    showModal(`📅 ${dateStr}`, `<div class="day-meals-detail">${mealsHtml}</div>`, []);
 }
 window.showDayMeals = showDayMeals;
 
@@ -6874,7 +6942,692 @@ function markAsCooked(recipeId) {
     recipe.cookCount = (recipe.cookCount || 0) + 1;
     saveToFirestore('recipes', recipeId, recipe);
     
-    showToast(\`✅ "\${recipe.name}" registrert som laget!\`, 'success');
+    showToast(`✅ "${recipe.name}" registrert som laget!`, 'success');
     checkAchievements();
 }
 window.markAsCooked = markAsCooked;
+
+// ===== LEGG TIL EKSISTERENDE OPPSKRIFTER I KOKEBOK =====
+function openAddRecipesToBook(bookId = null) {
+    const targetBookId = bookId || state.currentBook?.id;
+    if (!targetBookId) {
+        showToast('Velg en kokebok først', 'warning');
+        return;
+    }
+    
+    const book = state.books.find(b => b.id === targetBookId);
+    if (!book) return;
+    
+    const recipesNotInBook = state.recipes.filter(r => r.bookId !== targetBookId);
+    
+    if (recipesNotInBook.length === 0) {
+        showToast('Alle oppskrifter er allerede i denne kokeboken', 'info');
+        return;
+    }
+    
+    const recipesHtml = recipesNotInBook.map(r => `
+        <div class="add-recipe-item" data-id="${r.id}">
+            <div class="recipe-item-thumb">
+                ${r.images?.[0] ? `<img src="${r.images[0]}" alt="">` : '<span>🍽️</span>'}
+            </div>
+            <div class="recipe-item-info">
+                <strong>${escapeHtml(r.name)}</strong>
+                <span>${getCategoryName(r.category)}</span>
+            </div>
+            <button class="btn btn-sm btn-success add-to-book-btn">➕ Legg til</button>
+        </div>
+    `).join('');
+    
+    const html = `
+        <div class="add-recipes-to-book">
+            <p>Velg oppskrifter å legge til i <strong>${escapeHtml(book.name)}</strong>:</p>
+            
+            <div class="search-container">
+                <input type="text" id="addRecipeSearch" placeholder="🔍 Søk i oppskrifter..." class="search-input">
+            </div>
+            
+            <div class="add-recipes-list" id="addRecipesList">
+                ${recipesHtml}
+            </div>
+        </div>
+    `;
+    
+    showModal(`📚 Legg til i ${escapeHtml(book.name)}`, html, []);
+    
+    // Setup handlers
+    setTimeout(() => {
+        // Search
+        const searchInput = $('addRecipeSearch');
+        if (searchInput) {
+            searchInput.oninput = () => {
+                const query = searchInput.value.toLowerCase();
+                document.querySelectorAll('.add-recipe-item').forEach(item => {
+                    const name = item.querySelector('strong')?.textContent.toLowerCase() || '';
+                    item.style.display = name.includes(query) ? '' : 'none';
+                });
+            };
+        }
+        
+        // Add buttons
+        document.querySelectorAll('.add-to-book-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const item = btn.closest('.add-recipe-item');
+                const recipeId = item.dataset.id;
+                addRecipeToBook(recipeId, targetBookId);
+                item.remove();
+            };
+        });
+    }, 100);
+}
+window.openAddRecipesToBook = openAddRecipesToBook;
+
+function addRecipeToBook(recipeId, bookId) {
+    const recipe = state.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    
+    recipe.bookId = bookId;
+    saveToFirestore('recipes', recipeId, recipe);
+    
+    showToast(`"${recipe.name}" lagt til i kokeboken!`, 'success');
+}
+window.addRecipeToBook = addRecipeToBook;
+
+// ===== HANDLEMODUS - ENKEL BUTIKKMODUS =====
+function openShoppingMode() {
+    const shoppingList = state.shoppingList || [];
+    
+    if (shoppingList.length === 0) {
+        showToast('Handlelisten er tom! Legg til varer først.', 'warning');
+        return;
+    }
+    
+    // Group by category/department
+    const departments = {
+        'frukt_gront': { name: '🥬 Frukt & Grønt', items: [] },
+        'meieri': { name: '🥛 Meieri', items: [] },
+        'kjott': { name: '🥩 Kjøtt & Fisk', items: [] },
+        'bakeri': { name: '🍞 Bakeri', items: [] },
+        'fryser': { name: '❄️ Frysevarer', items: [] },
+        'torvarer': { name: '🏪 Tørrvarer', items: [] },
+        'hermetikk': { name: '🥫 Hermetikk', items: [] },
+        'drikke': { name: '🥤 Drikke', items: [] },
+        'annet': { name: '📦 Annet', items: [] }
+    };
+    
+    // Categorize items
+    shoppingList.forEach(item => {
+        const dept = categorizeShoppingItem(item.name || item);
+        if (departments[dept]) {
+            departments[dept].items.push(item);
+        } else {
+            departments.annet.items.push(item);
+        }
+    });
+    
+    const deptHtml = Object.entries(departments)
+        .filter(([_, dept]) => dept.items.length > 0)
+        .map(([key, dept]) => {
+            const itemsHtml = dept.items.map((item, idx) => {
+                const itemName = item.name || item;
+                const itemAmount = item.amount || '';
+                return `
+                    <div class="shopping-item" data-item="${escapeHtml(itemName)}">
+                        <button class="check-btn" onclick="toggleShoppingItem(this)">
+                            <span class="check-icon">○</span>
+                        </button>
+                        <span class="item-name">${escapeHtml(itemName)}</span>
+                        ${itemAmount ? `<span class="item-amount">${escapeHtml(itemAmount)}</span>` : ''}
+                    </div>
+                `;
+            }).join('');
+            
+            return `
+                <div class="shopping-dept">
+                    <div class="dept-header">${dept.name}</div>
+                    <div class="dept-items">${itemsHtml}</div>
+                </div>
+            `;
+        }).join('');
+    
+    const html = `
+        <div class="shopping-mode">
+            <div class="shopping-mode-header">
+                <span class="shopping-icon">🛒</span>
+                <h3>Handlemodus</h3>
+                <p>Trykk på varer for å krysse av!</p>
+            </div>
+            
+            <div class="shopping-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="shoppingProgress" style="width: 0%"></div>
+                </div>
+                <span id="shoppingCount">0 / ${shoppingList.length} varer</span>
+            </div>
+            
+            <div class="shopping-departments">
+                ${deptHtml}
+            </div>
+            
+            <div class="shopping-mode-actions">
+                <button class="btn btn-secondary" onclick="uncheckAllItems()">
+                    🔄 Nullstill
+                </button>
+                <button class="btn btn-success" onclick="finishShopping()">
+                    ✅ Ferdig!
+                </button>
+            </div>
+        </div>
+    `;
+    
+    showModal('🛒 Handlemodus', html, []);
+}
+window.openShoppingMode = openShoppingMode;
+
+function categorizeShoppingItem(itemName) {
+    const name = itemName.toLowerCase();
+    
+    // Frukt & Grønt
+    if (/eple|banan|appelsin|sitron|tomat|agurk|paprika|løk|gulrot|brokkoli|salat|potet|avokado|mango|frukt|grønn/i.test(name)) {
+        return 'frukt_gront';
+    }
+    // Meieri
+    if (/melk|ost|fløte|smør|yoghurt|rømme|egg|kesam|skyr/i.test(name)) {
+        return 'meieri';
+    }
+    // Kjøtt & Fisk
+    if (/kjøtt|kylling|svin|biff|laks|fisk|torsk|bacon|pølse|kjøttdeig|ribbe|skinke/i.test(name)) {
+        return 'kjott';
+    }
+    // Bakeri
+    if (/brød|rundstykke|bolle|croissant|kake|baguette|lompe|lefse/i.test(name)) {
+        return 'bakeri';
+    }
+    // Fryser
+    if (/fross|frys|is |iskrem|pizza|ferdig|pommes/i.test(name)) {
+        return 'fryser';
+    }
+    // Tørrvarer
+    if (/mel|sukker|ris|pasta|havre|müsli|kaffe|te|kakao|krydder|salt|pepper/i.test(name)) {
+        return 'torvarer';
+    }
+    // Hermetikk
+    if (/boks|hermetisk|tomat.*boks|bønner|mais|tun/i.test(name)) {
+        return 'hermetikk';
+    }
+    // Drikke
+    if (/juice|brus|vann|øl|vin|drikke|cola|fanta|sprite/i.test(name)) {
+        return 'drikke';
+    }
+    
+    return 'annet';
+}
+
+function toggleShoppingItem(btn) {
+    const item = btn.closest('.shopping-item');
+    item.classList.toggle('checked');
+    btn.querySelector('.check-icon').textContent = item.classList.contains('checked') ? '✓' : '○';
+    
+    updateShoppingProgress();
+}
+window.toggleShoppingItem = toggleShoppingItem;
+
+function updateShoppingProgress() {
+    const total = document.querySelectorAll('.shopping-item').length;
+    const checked = document.querySelectorAll('.shopping-item.checked').length;
+    const percent = Math.round((checked / total) * 100);
+    
+    const progressBar = $('shoppingProgress');
+    const countEl = $('shoppingCount');
+    
+    if (progressBar) progressBar.style.width = percent + '%';
+    if (countEl) countEl.textContent = `${checked} / ${total} varer`;
+    
+    // Celebration when done
+    if (checked === total && total > 0) {
+        showToast('🎉 Alle varer krysset av! Bra jobba!', 'success');
+    }
+}
+
+function uncheckAllItems() {
+    document.querySelectorAll('.shopping-item').forEach(item => {
+        item.classList.remove('checked');
+        item.querySelector('.check-icon').textContent = '○';
+    });
+    updateShoppingProgress();
+}
+window.uncheckAllItems = uncheckAllItems;
+
+function finishShopping() {
+    const checked = document.querySelectorAll('.shopping-item.checked').length;
+    const total = document.querySelectorAll('.shopping-item').length;
+    
+    if (checked < total) {
+        if (!confirm(`Du har ${total - checked} varer igjen. Vil du avslutte likevel?`)) {
+            return;
+        }
+    }
+    
+    // Remove checked items from shopping list
+    const checkedItems = Array.from(document.querySelectorAll('.shopping-item.checked'))
+        .map(el => el.dataset.item);
+    
+    state.shoppingList = state.shoppingList.filter(item => 
+        !checkedItems.includes(item.name || item)
+    );
+    
+    saveShoppingList();
+    closeGenericModal();
+    showToast('🛒 Handletur fullført! Resterende varer er lagret.', 'success');
+}
+window.finishShopping = finishShopping;
+
+// ===== OPPSKRIFT TIL NÆRBUTIKK - FINN NÆRMESTE BUTIKK =====
+function findNearestStores() {
+    if (!navigator.geolocation) {
+        showToast('Geolokasjon støttes ikke i denne nettleseren', 'error');
+        return;
+    }
+    
+    showToast('📍 Finner din posisjon...', 'info');
+    
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            const { latitude, longitude } = position.coords;
+            const mapsUrl = `https://www.google.com/maps/search/dagligvare+matbutikk/@${latitude},${longitude},15z`;
+            window.open(mapsUrl, '_blank');
+        },
+        error => {
+            showToast('Kunne ikke finne posisjonen din', 'error');
+        }
+    );
+}
+window.findNearestStores = findNearestStores;
+
+// ===== VOICE SHOPPING - LES HANDLELISTE HØYT =====
+function readShoppingListAloud() {
+    if (!('speechSynthesis' in window)) {
+        showToast('Talesyntese støttes ikke i denne nettleseren', 'error');
+        return;
+    }
+    
+    const list = state.shoppingList || [];
+    if (list.length === 0) {
+        showToast('Handlelisten er tom', 'warning');
+        return;
+    }
+    
+    const itemNames = list.map(item => item.name || item).join(', ');
+    const text = `Du trenger: ${itemNames}`;
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'nb-NO';
+    utterance.rate = 0.9;
+    
+    speechSynthesis.speak(utterance);
+    showToast('🔊 Leser handleliste...', 'info');
+}
+window.readShoppingListAloud = readShoppingListAloud;
+
+// ===== SMART LEFTOVER SUGGESTER =====
+function openLeftoverSuggester() {
+    const html = `
+        <div class="leftover-suggester">
+            <div class="suggester-header">
+                <span class="suggester-icon">🥡</span>
+                <h3>Rester-hjelper</h3>
+                <p>Skriv inn hva du har igjen i kjøleskapet!</p>
+            </div>
+            
+            <textarea id="leftoverInput" class="leftover-input" placeholder="F.eks:
+- Litt kokt pasta
+- Halv pakke bacon
+- 2 egg
+- Litt fløte
+- Parmesan"></textarea>
+            
+            <button class="btn btn-primary btn-large" onclick="suggestLeftoverRecipes()">
+                ✨ Finn oppskrifter
+            </button>
+            
+            <div id="leftoverResults"></div>
+        </div>
+    `;
+    
+    showModal('🥡 Hva kan du lage av restene?', html, []);
+}
+window.openLeftoverSuggester = openLeftoverSuggester;
+
+function suggestLeftoverRecipes() {
+    const input = $('leftoverInput')?.value || '';
+    const leftovers = input.split('\n')
+        .map(l => l.replace(/^[\-\*\•]\s*/, '').trim().toLowerCase())
+        .filter(l => l.length > 2);
+    
+    if (leftovers.length === 0) {
+        showToast('Skriv inn noen rester først', 'warning');
+        return;
+    }
+    
+    // Search in recipes
+    const matches = state.recipes.filter(recipe => {
+        const recipeText = (recipe.name + ' ' + JSON.stringify(recipe.ingredients || [])).toLowerCase();
+        return leftovers.some(leftover => recipeText.includes(leftover));
+    });
+    
+    // Also suggest classic leftover recipes
+    const suggestions = [
+        { name: 'Pasta Carbonara', leftovers: ['pasta', 'bacon', 'egg', 'fløte', 'parmesan'] },
+        { name: 'Omelett', leftovers: ['egg', 'ost', 'skinke', 'grønnsaker'] },
+        { name: 'Stekt ris', leftovers: ['ris', 'grønnsaker', 'egg', 'soyasaus'] },
+        { name: 'Suppe', leftovers: ['grønnsaker', 'kjøtt', 'buljong', 'pasta'] },
+        { name: 'Grateng', leftovers: ['pasta', 'ost', 'fløte', 'kjøtt'] },
+        { name: 'Wrap/Burrito', leftovers: ['kjøtt', 'grønnsaker', 'ris', 'bønner', 'ost'] },
+        { name: 'Salat', leftovers: ['grønnsaker', 'kylling', 'ost', 'pasta'] },
+        { name: 'Sandwich', leftovers: ['brød', 'skinke', 'ost', 'grønnsaker'] }
+    ];
+    
+    const relevantSuggestions = suggestions.filter(s => 
+        s.leftovers.some(l => leftovers.some(lo => lo.includes(l) || l.includes(lo)))
+    );
+    
+    let resultsHtml = '';
+    
+    if (matches.length > 0) {
+        resultsHtml += `
+            <div class="leftover-section">
+                <h4>📖 Fra dine oppskrifter:</h4>
+                ${matches.slice(0, 5).map(r => `
+                    <div class="leftover-match" onclick="viewRecipe('${r.id}'); closeGenericModal();">
+                        <span class="match-icon">🍽️</span>
+                        <span class="match-name">${escapeHtml(r.name)}</span>
+                        <span class="match-arrow">→</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    if (relevantSuggestions.length > 0) {
+        resultsHtml += `
+            <div class="leftover-section">
+                <h4>💡 Klassiske retter:</h4>
+                ${relevantSuggestions.map(s => `
+                    <div class="leftover-suggestion">
+                        <span class="suggestion-name">${s.name}</span>
+                        <span class="suggestion-hint">Passer med: ${s.leftovers.join(', ')}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    if (!resultsHtml) {
+        resultsHtml = `
+            <div class="no-matches">
+                <p>🤔 Fant ingen direkte treff, men prøv å søke etter oppskrifter eller se om AI-planleggeren har forslag!</p>
+            </div>
+        `;
+    }
+    
+    $('leftoverResults').innerHTML = resultsHtml;
+}
+window.suggestLeftoverRecipes = suggestLeftoverRecipes;
+
+// ===== RECIPE SCALING CALCULATOR =====
+function openRecipeScaler(recipeId) {
+    const recipe = state.recipes.find(r => r.id === recipeId) || state.currentRecipe;
+    if (!recipe) {
+        showToast('Velg en oppskrift først', 'warning');
+        return;
+    }
+    
+    const originalServings = recipe.servings || 4;
+    
+    let ingredientsArray = recipe.ingredients || [];
+    if (typeof ingredientsArray === 'string') {
+        ingredientsArray = ingredientsArray.split('\n').filter(i => i.trim());
+    }
+    
+    const html = `
+        <div class="recipe-scaler">
+            <h3>📊 Skalér "${escapeHtml(recipe.name)}"</h3>
+            
+            <div class="scaler-controls">
+                <div class="scaler-original">
+                    <label>Original:</label>
+                    <span>${originalServings} porsjoner</span>
+                </div>
+                <div class="scaler-new">
+                    <label>Ny mengde:</label>
+                    <input type="number" id="scalerServings" value="${originalServings}" min="1" max="100" onchange="updateScaledIngredients()">
+                    <span>porsjoner</span>
+                </div>
+            </div>
+            
+            <div class="quick-scale-btns">
+                <button onclick="setScale(0.5)">½×</button>
+                <button onclick="setScale(1)">1×</button>
+                <button onclick="setScale(2)">2×</button>
+                <button onclick="setScale(3)">3×</button>
+                <button onclick="setScale(4)">4×</button>
+            </div>
+            
+            <div id="scaledIngredients" class="scaled-ingredients">
+                ${ingredientsArray.map(ing => {
+                    const text = typeof ing === 'object' ? `${ing.amount || ''} ${ing.name || ''}` : ing;
+                    return `<div class="scaled-item">${escapeHtml(text.trim())}</div>`;
+                }).join('')}
+            </div>
+            
+            <button class="btn btn-primary" onclick="copyScaledIngredients()">
+                📋 Kopier til utklippstavle
+            </button>
+        </div>
+    `;
+    
+    showModal('📊 Skalér oppskrift', html, []);
+    
+    window.currentScaleRecipe = recipe;
+    window.originalServings = originalServings;
+}
+window.openRecipeScaler = openRecipeScaler;
+
+function setScale(multiplier) {
+    const original = window.originalServings || 4;
+    $('scalerServings').value = Math.round(original * multiplier);
+    updateScaledIngredients();
+}
+window.setScale = setScale;
+
+function updateScaledIngredients() {
+    const recipe = window.currentScaleRecipe;
+    if (!recipe) return;
+    
+    const originalServings = window.originalServings || 4;
+    const newServings = parseInt($('scalerServings')?.value) || originalServings;
+    const multiplier = newServings / originalServings;
+    
+    let ingredientsArray = recipe.ingredients || [];
+    if (typeof ingredientsArray === 'string') {
+        ingredientsArray = ingredientsArray.split('\n').filter(i => i.trim());
+    }
+    
+    const scaled = ingredientsArray.map(ing => {
+        const text = typeof ing === 'object' ? `${ing.amount || ''} ${ing.name || ''}` : ing;
+        return scaleIngredientText(text, multiplier);
+    });
+    
+    $('scaledIngredients').innerHTML = scaled.map(s => 
+        `<div class="scaled-item">${escapeHtml(s)}</div>`
+    ).join('');
+}
+window.updateScaledIngredients = updateScaledIngredients;
+
+function scaleIngredientText(text, multiplier) {
+    // Find numbers and scale them
+    return text.replace(/(\d+([.,]\d+)?)/g, (match) => {
+        const num = parseFloat(match.replace(',', '.'));
+        const scaled = num * multiplier;
+        // Round to nice fractions
+        if (scaled === Math.floor(scaled)) {
+            return scaled.toString();
+        } else if (Math.abs(scaled - Math.round(scaled * 2) / 2) < 0.1) {
+            return (Math.round(scaled * 2) / 2).toString().replace('.', ',');
+        } else {
+            return scaled.toFixed(1).replace('.', ',');
+        }
+    });
+}
+
+function copyScaledIngredients() {
+    const items = Array.from(document.querySelectorAll('.scaled-item'))
+        .map(el => el.textContent)
+        .join('\n');
+    
+    navigator.clipboard.writeText(items);
+    showToast('📋 Ingredienser kopiert!', 'success');
+}
+window.copyScaledIngredients = copyScaledIngredients;
+
+// ===== RECIPE NUTRITION TRACKER =====
+function openNutritionTracker() {
+    const history = JSON.parse(localStorage.getItem('kokebok_cooking_history') || '[]');
+    const last7Days = history.filter(h => {
+        const date = new Date(h.date);
+        const daysAgo = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
+        return daysAgo <= 7;
+    });
+    
+    const mealCount = last7Days.length;
+    const uniqueRecipes = new Set(last7Days.map(h => h.recipeId)).size;
+    
+    const html = `
+        <div class="nutrition-tracker">
+            <div class="tracker-header">
+                <span class="tracker-icon">📈</span>
+                <h3>Matdagbok - Siste 7 dager</h3>
+            </div>
+            
+            <div class="tracker-stats">
+                <div class="tracker-stat">
+                    <span class="stat-value">${mealCount}</span>
+                    <span class="stat-label">Måltider</span>
+                </div>
+                <div class="tracker-stat">
+                    <span class="stat-value">${uniqueRecipes}</span>
+                    <span class="stat-label">Unike retter</span>
+                </div>
+                <div class="tracker-stat">
+                    <span class="stat-value">${(mealCount / 7).toFixed(1)}</span>
+                    <span class="stat-label">Snitt/dag</span>
+                </div>
+            </div>
+            
+            <div class="tracker-tips">
+                <h4>💡 Tips for bedre matplanlegging:</h4>
+                <ul>
+                    <li>Prøv å variere mellom proteinkildene</li>
+                    <li>Inkluder minst 5 porsjoner frukt/grønt daglig</li>
+                    <li>Planlegg neste uke på søndag</li>
+                    <li>Bruk restene smart - se "Rester-hjelper"</li>
+                </ul>
+            </div>
+            
+            <div class="tracker-actions">
+                <button class="btn btn-primary" onclick="openAiMealPlanner(); closeGenericModal();">
+                    🤖 AI Ukemeny
+                </button>
+                <button class="btn btn-secondary" onclick="openCookingDiary(); closeGenericModal();">
+                    📅 Se kalender
+                </button>
+            </div>
+        </div>
+    `;
+    
+    showModal('📈 Matdagbok', html, []);
+}
+window.openNutritionTracker = openNutritionTracker;
+
+// ===== QUICK ADD TO SHOPPING =====
+function quickAddToShopping() {
+    const html = `
+        <div class="quick-add">
+            <p>Skriv inn varer (én per linje):</p>
+            <textarea id="quickAddItems" class="quick-add-textarea" placeholder="Melk
+Brød
+Ost
+Egg"></textarea>
+            <button class="btn btn-primary" onclick="processQuickAdd()">
+                ➕ Legg til alle
+            </button>
+        </div>
+    `;
+    
+    showModal('🛒 Hurtig-legg til', html, []);
+}
+window.quickAddToShopping = quickAddToShopping;
+
+function processQuickAdd() {
+    const input = $('quickAddItems')?.value || '';
+    const items = input.split('\n')
+        .map(i => i.trim())
+        .filter(i => i.length > 0);
+    
+    if (items.length === 0) {
+        showToast('Skriv inn minst én vare', 'warning');
+        return;
+    }
+    
+    items.forEach(item => {
+        if (!state.shoppingList) state.shoppingList = [];
+        state.shoppingList.push({ name: item, amount: '' });
+    });
+    
+    saveShoppingList();
+    closeGenericModal();
+    showToast(`✅ ${items.length} varer lagt til!`, 'success');
+}
+window.processQuickAdd = processQuickAdd;
+
+// ===== RECIPE OF THE DAY =====
+function showRecipeOfTheDay() {
+    if (state.recipes.length === 0) {
+        showToast('Legg til oppskrifter først', 'warning');
+        return;
+    }
+    
+    // Use date as seed for consistent daily recipe
+    const today = new Date();
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    const index = seed % state.recipes.length;
+    const recipe = state.recipes[index];
+    
+    const html = `
+        <div class="recipe-of-day">
+            <div class="rod-badge">⭐ Dagens oppskrift ⭐</div>
+            
+            <div class="rod-image">
+                ${recipe.images?.[0] 
+                    ? `<img src="${recipe.images[0]}" alt="${escapeHtml(recipe.name)}">`
+                    : '<span class="rod-placeholder">🍽️</span>'}
+            </div>
+            
+            <h2 class="rod-title">${escapeHtml(recipe.name)}</h2>
+            
+            <div class="rod-meta">
+                <span>${getCategoryName(recipe.category)}</span>
+                ${recipe.prepTime ? `<span>⏱️ ${recipe.prepTime}</span>` : ''}
+                ${recipe.servings ? `<span>👥 ${recipe.servings} porsjoner</span>` : ''}
+            </div>
+            
+            <button class="btn btn-primary btn-large" onclick="viewRecipe('${recipe.id}'); closeGenericModal();">
+                Se oppskrift →
+            </button>
+        </div>
+    `;
+    
+    showModal('⭐ Dagens oppskrift', html, []);
+}
+window.showRecipeOfTheDay = showRecipeOfTheDay;
+

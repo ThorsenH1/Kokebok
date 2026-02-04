@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=3.4">
+    <link rel="stylesheet" href="style.css?v=3.5">
 </head>
 <body>
     <!-- Login Screen -->
@@ -652,8 +652,18 @@
                 <button class="menu-item" id="menuShoppingList">
                     <span>🛒</span> Handleliste
                 </button>
+                <button class="menu-item" onclick="openShoppingMode(); toggleSideMenu(false);">
+                    <span>🏪</span> Handlemodus
+                    <span class="menu-badge premium">Premium</span>
+                </button>
+                <button class="menu-item" onclick="quickAddToShopping(); toggleSideMenu(false);">
+                    <span>⚡</span> Hurtig-legg til
+                </button>
                 <button class="menu-item" onclick="optimizeGroceryList(); toggleSideMenu(false);">
                     <span>🗂️</span> Smart handleliste
+                </button>
+                <button class="menu-item" onclick="findNearestStores(); toggleSideMenu(false);">
+                    <span>📍</span> Finn butikker
                 </button>
                 <button class="menu-item" onclick="openBudgetPlanner(); toggleSideMenu(false);">
                     <span>💵</span> Ukesbudsjett
@@ -666,9 +676,24 @@
                     <span>📐</span> Mål og vekt-kalkulator
                     <span class="menu-badge new">Ny!</span>
                 </button>
+                <button class="menu-item" onclick="openRecipeScaler(); toggleSideMenu(false);">
+                    <span>⚖️</span> Oppskriftsskalerer
+                    <span class="menu-badge premium">Premium</span>
+                </button>
+                <button class="menu-item" onclick="openLeftoverSuggester(); toggleSideMenu(false);">
+                    <span>🥡</span> Rester-hjelper
+                    <span class="menu-badge premium">Premium</span>
+                </button>
+                <button class="menu-item" onclick="showRecipeOfTheDay(); toggleSideMenu(false);">
+                    <span>🎲</span> Dagens oppskrift
+                </button>
                 <button class="menu-item" onclick="openCookingDiary(); toggleSideMenu(false);">
                     <span>📅</span> Matkalender
                     <span class="menu-badge new">Ny!</span>
+                </button>
+                <button class="menu-item" onclick="openNutritionTracker(); toggleSideMenu(false);">
+                    <span>🥗</span> Ernæringsoversikt
+                    <span class="menu-badge premium">Premium</span>
                 </button>
                 <button class="menu-item" id="menuTimer">
                     <span>⏱️</span> Koketimer
@@ -1025,6 +1050,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js?v=3.2"></script>
-    <script src="app.js?v=3.4"></script>
+    <script src="app.js?v=3.5"></script>
 </body>
 </html>
