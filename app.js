@@ -1,11 +1,11 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v3.2
+// FAMILIENS KOKEBOK APP v3.4
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
 // 100% privat - ingen AI lærer av dine oppskrifter
 // ==========================================
 
-const APP_VERSION = '3.2.0';
+const APP_VERSION = '3.4.0';
 
 // ===== Firebase Initialization =====
 firebase.initializeApp(firebaseConfig);
@@ -5555,3 +5555,1326 @@ window.openWhatCanIMake = openWhatCanIMake;
 window.showHouseholdSelector = showHouseholdSelector;
 window.showTopRatedRecipes = showTopRatedRecipes;
 window.openQuickRecipeFromText = openQuickRecipeFromText;
+
+// ===== URL RECIPE IMPORT =====
+async function openUrlImport() {
+    const html = `
+        <div class="url-import">
+            <h3>🔗 Importer fra URL</h3>
+            <p>Lim inn lenken til en oppskrift fra en nettside, så henter vi den automatisk!</p>
+            
+            <div class="url-input-container">
+                <input type="url" id="recipeUrl" placeholder="https://www.matprat.no/oppskrifter/..." class="url-input">
+                <button class="btn btn-primary" onclick="importFromUrl()">
+                    <span class="btn-icon">📥</span> Hent oppskrift
+                </button>
+            </div>
+            
+            <div class="supported-sites">
+                <p><strong>Støttede nettsider:</strong></p>
+                <div class="site-logos">
+                    <span class="site-tag">🇳🇴 Matprat</span>
+                    <span class="site-tag">🇳🇴 Tine</span>
+                    <span class="site-tag">🇳🇴 Godt.no</span>
+                    <span class="site-tag">🌍 AllRecipes</span>
+                    <span class="site-tag">🌍 BBC Good Food</span>
+                    <span class="site-tag">🌍 + flere...</span>
+                </div>
+            </div>
+            
+            <div id="urlImportStatus"></div>
+            <div id="urlImportPreview"></div>
+        </div>
+    `;
+    
+    showModal('🔗 Importer oppskrift fra URL', html, []);
+}
+window.openUrlImport = openUrlImport;
+
+async function importFromUrl() {
+    const url = $('recipeUrl')?.value?.trim();
+    const statusEl = $('urlImportStatus');
+    const previewEl = $('urlImportPreview');
+    
+    if (!url) {
+        showToast('Skriv inn en URL først', 'warning');
+        return;
+    }
+    
+    // Validate URL
+    try {
+        new URL(url);
+    } catch {
+        showToast('Ugyldig URL-format', 'error');
+        return;
+    }
+    
+    statusEl.innerHTML = `
+        <div class="import-loading">
+            <div class="spinner"></div>
+            <p>Henter oppskrift fra ${new URL(url).hostname}...</p>
+        </div>
+    `;
+    
+    try {
+        // Use a CORS proxy to fetch the page
+        const corsProxies = [
+            'https://api.allorigins.win/raw?url=',
+            'https://corsproxy.io/?',
+            'https://api.codetabs.com/v1/proxy?quest='
+        ];
+        
+        let html = null;
+        for (const proxy of corsProxies) {
+            try {
+                const response = await fetch(proxy + encodeURIComponent(url), {
+                    timeout: 10000
+                });
+                if (response.ok) {
+                    html = await response.text();
+                    break;
+                }
+            } catch (e) {
+                console.log('Proxy failed:', proxy);
+            }
+        }
+        
+        if (!html) {
+            throw new Error('Kunne ikke hente siden');
+        }
+        
+        // Parse the HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Try to extract recipe data using multiple methods
+        const recipe = extractRecipeFromHtml(doc, url);
+        
+        if (!recipe.name) {
+            throw new Error('Kunne ikke finne oppskriften på denne siden');
+        }
+        
+        // Show preview
+        previewEl.innerHTML = `
+            <div class="import-preview">
+                <h4>✅ Funnet oppskrift!</h4>
+                <div class="preview-card">
+                    <strong>${escapeHtml(recipe.name)}</strong>
+                    <p>${recipe.ingredients?.length || 0} ingredienser funnet</p>
+                    ${recipe.servings ? `<p>Porsjoner: ${recipe.servings}</p>` : ''}
+                    ${recipe.prepTime ? `<p>Tid: ${recipe.prepTime}</p>` : ''}
+                </div>
+                <button class="btn btn-success" onclick="saveImportedRecipe('${encodeURIComponent(JSON.stringify(recipe))}')">
+                    💾 Lagre oppskrift
+                </button>
+            </div>
+        `;
+        
+        statusEl.innerHTML = '';
+        
+    } catch (error) {
+        console.error('Import error:', error);
+        statusEl.innerHTML = `
+            <div class="import-error">
+                <span>❌</span>
+                <p>${error.message}</p>
+                <p class="hint">Prøv å kopiere oppskriften manuelt med "Lim inn oppskrift"-funksjonen.</p>
+            </div>
+        `;
+    }
+}
+window.importFromUrl = importFromUrl;
+
+function extractRecipeFromHtml(doc, url) {
+    const recipe = {
+        name: '',
+        ingredients: [],
+        instructions: '',
+        servings: 4,
+        prepTime: '',
+        cookTime: '',
+        source: url,
+        importedAt: new Date().toISOString()
+    };
+    
+    // Method 1: Try JSON-LD structured data (best method)
+    const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of jsonLdScripts) {
+        try {
+            const data = JSON.parse(script.textContent);
+            const recipeData = findRecipeInJsonLd(data);
+            if (recipeData) {
+                recipe.name = recipeData.name || '';
+                recipe.description = recipeData.description || '';
+                recipe.servings = parseInt(recipeData.recipeYield) || 4;
+                recipe.prepTime = formatDuration(recipeData.prepTime);
+                recipe.cookTime = formatDuration(recipeData.cookTime);
+                recipe.image = recipeData.image?.url || recipeData.image?.[0] || recipeData.image || '';
+                
+                // Parse ingredients
+                if (recipeData.recipeIngredient) {
+                    recipe.ingredients = recipeData.recipeIngredient.map(ing => {
+                        const parsed = parseIngredientString(ing);
+                        return { name: parsed.name, amount: parsed.amount };
+                    });
+                }
+                
+                // Parse instructions
+                if (recipeData.recipeInstructions) {
+                    if (Array.isArray(recipeData.recipeInstructions)) {
+                        recipe.instructions = recipeData.recipeInstructions
+                            .map(step => step.text || step)
+                            .join('\n\n');
+                    } else {
+                        recipe.instructions = recipeData.recipeInstructions;
+                    }
+                }
+                
+                if (recipe.name) return recipe;
+            }
+        } catch (e) {
+            console.log('JSON-LD parse error:', e);
+        }
+    }
+    
+    // Method 2: Look for common recipe markup patterns
+    // Title
+    recipe.name = doc.querySelector('h1.recipe-title, h1.entry-title, .recipe-name, [itemprop="name"], h1')?.textContent?.trim() || '';
+    
+    // Ingredients
+    const ingredientEls = doc.querySelectorAll('[itemprop="recipeIngredient"], .ingredient, .recipe-ingredient, .ingredients li, .ingredient-list li');
+    if (ingredientEls.length > 0) {
+        recipe.ingredients = Array.from(ingredientEls).map(el => {
+            const text = el.textContent.trim();
+            const parsed = parseIngredientString(text);
+            return { name: parsed.name, amount: parsed.amount };
+        }).filter(i => i.name);
+    }
+    
+    // Instructions
+    const instructionEls = doc.querySelectorAll('[itemprop="recipeInstructions"], .recipe-instructions, .instructions li, .method li, .steps li');
+    if (instructionEls.length > 0) {
+        recipe.instructions = Array.from(instructionEls)
+            .map(el => el.textContent.trim())
+            .filter(t => t.length > 10)
+            .join('\n\n');
+    }
+    
+    // Servings
+    const servingsEl = doc.querySelector('[itemprop="recipeYield"], .servings, .yield');
+    if (servingsEl) {
+        const match = servingsEl.textContent.match(/\d+/);
+        if (match) recipe.servings = parseInt(match[0]);
+    }
+    
+    return recipe;
+}
+
+function findRecipeInJsonLd(data) {
+    if (!data) return null;
+    if (data['@type'] === 'Recipe') return data;
+    if (Array.isArray(data)) {
+        for (const item of data) {
+            const found = findRecipeInJsonLd(item);
+            if (found) return found;
+        }
+    }
+    if (data['@graph']) return findRecipeInJsonLd(data['@graph']);
+    return null;
+}
+
+function formatDuration(isoDuration) {
+    if (!isoDuration) return '';
+    // Parse ISO 8601 duration (PT30M, PT1H30M, etc.)
+    const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+    if (!match) return isoDuration;
+    const hours = parseInt(match[1]) || 0;
+    const minutes = parseInt(match[2]) || 0;
+    if (hours && minutes) return `${hours} t ${minutes} min`;
+    if (hours) return `${hours} time${hours > 1 ? 'r' : ''}`;
+    if (minutes) return `${minutes} min`;
+    return '';
+}
+
+function parseIngredientString(str) {
+    // Try to split amount from ingredient name
+    const match = str.match(/^([\d\s,./½¼¾⅓⅔]+\s*(?:g|kg|dl|l|ml|ss|ts|stk|pk|kopp|cups?|tbsp|tsp)?)\s*(.+)$/i);
+    if (match) {
+        return { amount: match[1].trim(), name: match[2].trim() };
+    }
+    return { amount: '', name: str.trim() };
+}
+
+function saveImportedRecipe(encodedData) {
+    const data = JSON.parse(decodeURIComponent(encodedData));
+    
+    const newRecipe = {
+        id: 'recipe_' + Date.now(),
+        name: data.name,
+        description: data.description || '',
+        ingredients: data.ingredients || [],
+        instructions: data.instructions || '',
+        servings: data.servings || 4,
+        prepTime: data.prepTime || '',
+        cookTime: data.cookTime || '',
+        source: data.source,
+        image: data.image || '',
+        createdAt: new Date().toISOString(),
+        imported: true
+    };
+    
+    state.recipes.push(newRecipe);
+    saveToFirestore('recipes', newRecipe.id, newRecipe);
+    
+    showToast('Oppskrift importert!', 'success');
+    closeGenericModal();
+    renderRecipes();
+    checkAchievements();
+}
+window.saveImportedRecipe = saveImportedRecipe;
+
+// ===== MÅL OG VEKT KALKULATOR (som Matprat men bedre) =====
+const measurementData = {
+    // Format: ingrediens -> { grPerDl, grPerSs, grPerTs, grPerKopp, stykkvekt }
+    ingredients: {
+        // Mel og stivelse
+        'hvetemel': { grPerDl: 55, grPerSs: 9, grPerTs: 3, grPerKopp: 137.5 },
+        'sammalt hvetemel': { grPerDl: 60, grPerSs: 10, grPerTs: 3.3, grPerKopp: 150 },
+        'grovt mel': { grPerDl: 60, grPerSs: 10, grPerTs: 3.3, grPerKopp: 150 },
+        'havremel': { grPerDl: 45, grPerSs: 7, grPerTs: 2.5, grPerKopp: 112.5 },
+        'maisenna': { grPerDl: 60, grPerSs: 10, grPerTs: 3.3, grPerKopp: 150 },
+        'potetmel': { grPerDl: 75, grPerSs: 12, grPerTs: 4, grPerKopp: 187.5 },
+        'bakepulver': { grPerDl: 90, grPerSs: 15, grPerTs: 5, grPerKopp: 225 },
+        'natron': { grPerDl: 100, grPerSs: 17, grPerTs: 5.5, grPerKopp: 250 },
+        
+        // Sukker
+        'sukker': { grPerDl: 90, grPerSs: 13, grPerTs: 4.5, grPerKopp: 225 },
+        'melis': { grPerDl: 55, grPerSs: 8, grPerTs: 2.5, grPerKopp: 137.5 },
+        'brunt sukker': { grPerDl: 80, grPerSs: 12, grPerTs: 4, grPerKopp: 200 },
+        'vaniljesukker': { grPerDl: 85, grPerSs: 13, grPerTs: 4, grPerKopp: 212.5 },
+        'honning': { grPerDl: 140, grPerSs: 21, grPerTs: 7, grPerKopp: 350 },
+        'sirup': { grPerDl: 140, grPerSs: 21, grPerTs: 7, grPerKopp: 350 },
+        
+        // Meieriprodukter
+        'smør': { grPerDl: 85, grPerSs: 15, grPerTs: 5, grPerKopp: 212.5 },
+        'margarin': { grPerDl: 85, grPerSs: 15, grPerTs: 5, grPerKopp: 212.5 },
+        'melk': { grPerDl: 100, grPerSs: 15, grPerTs: 5, grPerKopp: 250 },
+        'fløte': { grPerDl: 100, grPerSs: 15, grPerTs: 5, grPerKopp: 250 },
+        'rømme': { grPerDl: 100, grPerSs: 15, grPerTs: 5, grPerKopp: 250 },
+        'kremost': { grPerDl: 115, grPerSs: 17, grPerTs: 6, grPerKopp: 287.5 },
+        'cottage cheese': { grPerDl: 110, grPerSs: 16, grPerTs: 5.5, grPerKopp: 275 },
+        'yoghurt': { grPerDl: 105, grPerSs: 16, grPerTs: 5, grPerKopp: 262.5 },
+        'parmesan revet': { grPerDl: 50, grPerSs: 8, grPerTs: 2.5, grPerKopp: 125 },
+        'ost revet': { grPerDl: 45, grPerSs: 7, grPerTs: 2.3, grPerKopp: 112.5 },
+        
+        // Fett og olje
+        'olje': { grPerDl: 90, grPerSs: 14, grPerTs: 4.5, grPerKopp: 225 },
+        'olivenolje': { grPerDl: 90, grPerSs: 14, grPerTs: 4.5, grPerKopp: 225 },
+        
+        // Væsker
+        'vann': { grPerDl: 100, grPerSs: 15, grPerTs: 5, grPerKopp: 250 },
+        
+        // Nøtter og frø
+        'mandler': { grPerDl: 70, grPerSs: 11, grPerTs: 3.5, grPerKopp: 175 },
+        'hasselnøtter': { grPerDl: 65, grPerSs: 10, grPerTs: 3.3, grPerKopp: 162.5 },
+        'valnøtter': { grPerDl: 50, grPerSs: 8, grPerTs: 2.5, grPerKopp: 125 },
+        'pinjekjerner': { grPerDl: 70, grPerSs: 11, grPerTs: 3.5, grPerKopp: 175 },
+        'sesamfrø': { grPerDl: 65, grPerSs: 10, grPerTs: 3.3, grPerKopp: 162.5 },
+        'solsikkefrø': { grPerDl: 60, grPerSs: 9, grPerTs: 3, grPerKopp: 150 },
+        'chiafrø': { grPerDl: 80, grPerSs: 12, grPerTs: 4, grPerKopp: 200 },
+        'linfrø': { grPerDl: 85, grPerSs: 13, grPerTs: 4.3, grPerKopp: 212.5 },
+        
+        // Frokostblanding
+        'havregryn': { grPerDl: 40, grPerSs: 6, grPerTs: 2, grPerKopp: 100 },
+        'lettkokte havregryn': { grPerDl: 40, grPerSs: 6, grPerTs: 2, grPerKopp: 100 },
+        'cornflakes': { grPerDl: 15, grPerSs: 2.5, grPerTs: 0.8, grPerKopp: 37.5 },
+        'müsli': { grPerDl: 45, grPerSs: 7, grPerTs: 2.3, grPerKopp: 112.5 },
+        
+        // Ris og pasta
+        'ris': { grPerDl: 90, grPerSs: 14, grPerTs: 4.5, grPerKopp: 225 },
+        'risotto-ris': { grPerDl: 95, grPerSs: 14, grPerTs: 4.7, grPerKopp: 237.5 },
+        'couscous': { grPerDl: 90, grPerSs: 14, grPerTs: 4.5, grPerKopp: 225 },
+        'bulgur': { grPerDl: 85, grPerSs: 13, grPerTs: 4.3, grPerKopp: 212.5 },
+        'quinoa': { grPerDl: 85, grPerSs: 13, grPerTs: 4.3, grPerKopp: 212.5 },
+        
+        // Kakao og sjokolade
+        'kakao': { grPerDl: 45, grPerSs: 7, grPerTs: 2.3, grPerKopp: 112.5 },
+        'sjokoladebiter': { grPerDl: 85, grPerSs: 13, grPerTs: 4.3, grPerKopp: 212.5 },
+        
+        // Krydder
+        'salt': { grPerDl: 120, grPerSs: 18, grPerTs: 6, grPerKopp: 300 },
+        'pepper': { grPerDl: 50, grPerSs: 8, grPerTs: 2.5, grPerKopp: 125 },
+        'kanel': { grPerDl: 55, grPerSs: 8, grPerTs: 2.8, grPerKopp: 137.5 },
+        'ingefær malt': { grPerDl: 50, grPerSs: 8, grPerTs: 2.5, grPerKopp: 125 },
+        'muskatnøtt': { grPerDl: 55, grPerSs: 8, grPerTs: 2.8, grPerKopp: 137.5 },
+        'kardemomme': { grPerDl: 50, grPerSs: 8, grPerTs: 2.5, grPerKopp: 125 },
+        
+        // Hermetikk/annet
+        'rosiner': { grPerDl: 70, grPerSs: 11, grPerTs: 3.5, grPerKopp: 175 },
+        'tørkede aprikoser': { grPerDl: 65, grPerSs: 10, grPerTs: 3.3, grPerKopp: 162.5 },
+        'kokos revet': { grPerDl: 35, grPerSs: 5, grPerTs: 1.8, grPerKopp: 87.5 },
+        'peanøttsmør': { grPerDl: 130, grPerSs: 20, grPerTs: 6.5, grPerKopp: 325 },
+        'syltetøy': { grPerDl: 130, grPerSs: 20, grPerTs: 6.5, grPerKopp: 325 },
+        
+        // Kaffe
+        'kaffe malt': { grPerDl: 35, grPerSs: 6, grPerTs: 2, grPerKopp: 87.5 }
+    },
+    
+    // Stykkvekt for frukt og grønnsaker
+    produce: {
+        'eple': { avgWeight: 150, unit: 'stk' },
+        'banan': { avgWeight: 120, unit: 'stk' },
+        'appelsin': { avgWeight: 200, unit: 'stk' },
+        'sitron': { avgWeight: 80, unit: 'stk' },
+        'lime': { avgWeight: 50, unit: 'stk' },
+        'avokado': { avgWeight: 200, unit: 'stk' },
+        'tomat': { avgWeight: 120, unit: 'stk' },
+        'agurk': { avgWeight: 335, unit: 'stk' },
+        'paprika': { avgWeight: 180, unit: 'stk' },
+        'løk': { avgWeight: 150, unit: 'stk' },
+        'hvitløkfedd': { avgWeight: 5, unit: 'fedd' },
+        'gulrot': { avgWeight: 80, unit: 'stk' },
+        'potet': { avgWeight: 150, unit: 'stk' },
+        'brokkoli': { avgWeight: 400, unit: 'hode' },
+        'blomkål': { avgWeight: 600, unit: 'hode' },
+        'squash': { avgWeight: 300, unit: 'stk' },
+        'aubergine': { avgWeight: 350, unit: 'stk' },
+        'egg': { avgWeight: 60, unit: 'stk' }
+    }
+};
+
+function openMeasurementCalculator() {
+    const ingredientOptions = Object.keys(measurementData.ingredients)
+        .map(i => `<option value="${i}">${i.charAt(0).toUpperCase() + i.slice(1)}</option>`)
+        .join('');
+    
+    const produceOptions = Object.keys(measurementData.produce)
+        .map(i => `<option value="${i}">${i.charAt(0).toUpperCase() + i.slice(1)}</option>`)
+        .join('');
+    
+    const html = `
+        <div class="measurement-calculator">
+            <div class="calc-tabs">
+                <button class="calc-tab active" onclick="switchCalcTab('convert')">🔄 Regn om</button>
+                <button class="calc-tab" onclick="switchCalcTab('weight')">⚖️ Vekt til mengde</button>
+                <button class="calc-tab" onclick="switchCalcTab('tools')">📐 Verktøy</button>
+            </div>
+            
+            <div id="calcTabContent">
+                <div id="convertTab" class="calc-content active">
+                    <h4>Regn om ingrediens</h4>
+                    <p>Velg ingrediens og skriv inn mengde:</p>
+                    
+                    <div class="calc-row">
+                        <select id="calcIngredient" onchange="updateCalculation()">
+                            <option value="">Velg ingrediens...</option>
+                            ${ingredientOptions}
+                        </select>
+                    </div>
+                    
+                    <div class="calc-input-grid">
+                        <div class="calc-input-item">
+                            <label>Gram</label>
+                            <input type="number" id="calcGram" placeholder="0" oninput="calcFromGram()">
+                        </div>
+                        <div class="calc-input-item">
+                            <label>Desiliter</label>
+                            <input type="number" id="calcDl" placeholder="0" step="0.1" oninput="calcFromDl()">
+                        </div>
+                        <div class="calc-input-item">
+                            <label>Spiseskje</label>
+                            <input type="number" id="calcSs" placeholder="0" step="0.5" oninput="calcFromSs()">
+                        </div>
+                        <div class="calc-input-item">
+                            <label>Teskje</label>
+                            <input type="number" id="calcTs" placeholder="0" step="0.5" oninput="calcFromTs()">
+                        </div>
+                        <div class="calc-input-item">
+                            <label>Kopp (2.5 dl)</label>
+                            <input type="number" id="calcKopp" placeholder="0" step="0.25" oninput="calcFromKopp()">
+                        </div>
+                        <div class="calc-input-item">
+                            <label>US Cup</label>
+                            <input type="number" id="calcCup" placeholder="0" step="0.25" oninput="calcFromCup()">
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="weightTab" class="calc-content">
+                    <h4>Vekt til mengde (frukt & grønt)</h4>
+                    <p>Lurer du på hvor mye du trenger i antall?</p>
+                    
+                    <div class="calc-row">
+                        <select id="produceSelect" onchange="updateProduceCalc()">
+                            <option value="">Velg råvare...</option>
+                            ${produceOptions}
+                        </select>
+                    </div>
+                    
+                    <div class="produce-calc-row">
+                        <div class="produce-input">
+                            <label>Gram</label>
+                            <input type="number" id="produceGram" placeholder="0" oninput="calcProduceFromGram()">
+                        </div>
+                        <span class="calc-equals">=</span>
+                        <div class="produce-result">
+                            <span id="produceAmount">0</span>
+                            <span id="produceUnit">stk</span>
+                        </div>
+                    </div>
+                    
+                    <div id="produceInfo" class="produce-info"></div>
+                </div>
+                
+                <div id="toolsTab" class="calc-content">
+                    <h4>Mål, vekt og temperatur</h4>
+                    
+                    <div class="tool-section">
+                        <h5>⚖️ Vekt</h5>
+                        <div class="tool-row">
+                            <input type="number" id="toolGram" placeholder="1000" value="1000" oninput="convertWeight()">
+                            <span>g =</span>
+                            <input type="number" id="toolHg" readonly>
+                            <span>hg =</span>
+                            <input type="number" id="toolKg" readonly>
+                            <span>kg</span>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-section">
+                        <h5>🥛 Volum</h5>
+                        <div class="tool-row">
+                            <input type="number" id="toolMl" placeholder="1000" value="1000" oninput="convertVolume()">
+                            <span>ml =</span>
+                            <input type="number" id="toolDl" readonly>
+                            <span>dl =</span>
+                            <input type="number" id="toolL" readonly>
+                            <span>l</span>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-section">
+                        <h5>🌡️ Temperatur</h5>
+                        <div class="tool-row">
+                            <input type="number" id="toolCelsius" placeholder="180" value="180" oninput="convertTemp()">
+                            <span>°C =</span>
+                            <input type="number" id="toolFahrenheit" readonly>
+                            <span>°F</span>
+                        </div>
+                        <div class="temp-presets">
+                            <button onclick="setTemp(150)">150°C</button>
+                            <button onclick="setTemp(175)">175°C</button>
+                            <button onclick="setTemp(180)">180°C</button>
+                            <button onclick="setTemp(200)">200°C</button>
+                            <button onclick="setTemp(220)">220°C</button>
+                            <button onclick="setTemp(250)">250°C</button>
+                        </div>
+                    </div>
+                    
+                    <div class="quick-reference">
+                        <h5>📝 Hurtigreferanse</h5>
+                        <div class="ref-grid">
+                            <div class="ref-item">
+                                <span class="ref-icon">🥄</span>
+                                <span>1 ss = 15 ml</span>
+                            </div>
+                            <div class="ref-item">
+                                <span class="ref-icon">🥄</span>
+                                <span>1 ts = 5 ml</span>
+                            </div>
+                            <div class="ref-item">
+                                <span class="ref-icon">☕</span>
+                                <span>1 kopp = 2.5 dl</span>
+                            </div>
+                            <div class="ref-item">
+                                <span class="ref-icon">🇺🇸</span>
+                                <span>1 US cup = 2.37 dl</span>
+                            </div>
+                            <div class="ref-item">
+                                <span class="ref-icon">🇺🇸</span>
+                                <span>1 oz = 28.35 g</span>
+                            </div>
+                            <div class="ref-item">
+                                <span class="ref-icon">🇺🇸</span>
+                                <span>1 lb = 453.6 g</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    showModal('📐 Mål og vekt-kalkulator', html, []);
+    
+    // Initialize tool values
+    setTimeout(() => {
+        convertWeight();
+        convertVolume();
+        convertTemp();
+    }, 100);
+}
+window.openMeasurementCalculator = openMeasurementCalculator;
+
+function switchCalcTab(tabId) {
+    document.querySelectorAll('.calc-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.calc-content').forEach(c => c.classList.remove('active'));
+    
+    document.querySelector(\`.calc-tab[onclick*="\${tabId}"]\`).classList.add('active');
+    document.getElementById(tabId + 'Tab')?.classList.add('active');
+}
+window.switchCalcTab = switchCalcTab;
+
+function updateCalculation() {
+    // Reset all fields
+    ['calcGram', 'calcDl', 'calcSs', 'calcTs', 'calcKopp', 'calcCup'].forEach(id => {
+        const el = $(id);
+        if (el) el.value = '';
+    });
+}
+
+function getSelectedIngredient() {
+    const select = $('calcIngredient');
+    const ingredientName = select?.value;
+    if (!ingredientName) return null;
+    return measurementData.ingredients[ingredientName];
+}
+
+function calcFromGram() {
+    const ing = getSelectedIngredient();
+    if (!ing) return;
+    const gram = parseFloat($('calcGram')?.value) || 0;
+    
+    $('calcDl').value = (gram / ing.grPerDl).toFixed(2);
+    $('calcSs').value = (gram / ing.grPerSs).toFixed(1);
+    $('calcTs').value = (gram / ing.grPerTs).toFixed(1);
+    $('calcKopp').value = (gram / ing.grPerKopp).toFixed(2);
+    $('calcCup').value = (gram / (ing.grPerKopp * 0.948)).toFixed(2); // US cup is ~237ml vs 250ml
+}
+window.calcFromGram = calcFromGram;
+
+function calcFromDl() {
+    const ing = getSelectedIngredient();
+    if (!ing) return;
+    const dl = parseFloat($('calcDl')?.value) || 0;
+    const gram = dl * ing.grPerDl;
+    
+    $('calcGram').value = Math.round(gram);
+    $('calcSs').value = (gram / ing.grPerSs).toFixed(1);
+    $('calcTs').value = (gram / ing.grPerTs).toFixed(1);
+    $('calcKopp').value = (gram / ing.grPerKopp).toFixed(2);
+    $('calcCup').value = (gram / (ing.grPerKopp * 0.948)).toFixed(2);
+}
+window.calcFromDl = calcFromDl;
+
+function calcFromSs() {
+    const ing = getSelectedIngredient();
+    if (!ing) return;
+    const ss = parseFloat($('calcSs')?.value) || 0;
+    const gram = ss * ing.grPerSs;
+    
+    $('calcGram').value = Math.round(gram);
+    $('calcDl').value = (gram / ing.grPerDl).toFixed(2);
+    $('calcTs').value = (gram / ing.grPerTs).toFixed(1);
+    $('calcKopp').value = (gram / ing.grPerKopp).toFixed(2);
+    $('calcCup').value = (gram / (ing.grPerKopp * 0.948)).toFixed(2);
+}
+window.calcFromSs = calcFromSs;
+
+function calcFromTs() {
+    const ing = getSelectedIngredient();
+    if (!ing) return;
+    const ts = parseFloat($('calcTs')?.value) || 0;
+    const gram = ts * ing.grPerTs;
+    
+    $('calcGram').value = Math.round(gram);
+    $('calcDl').value = (gram / ing.grPerDl).toFixed(2);
+    $('calcSs').value = (gram / ing.grPerSs).toFixed(1);
+    $('calcKopp').value = (gram / ing.grPerKopp).toFixed(2);
+    $('calcCup').value = (gram / (ing.grPerKopp * 0.948)).toFixed(2);
+}
+window.calcFromTs = calcFromTs;
+
+function calcFromKopp() {
+    const ing = getSelectedIngredient();
+    if (!ing) return;
+    const kopp = parseFloat($('calcKopp')?.value) || 0;
+    const gram = kopp * ing.grPerKopp;
+    
+    $('calcGram').value = Math.round(gram);
+    $('calcDl').value = (gram / ing.grPerDl).toFixed(2);
+    $('calcSs').value = (gram / ing.grPerSs).toFixed(1);
+    $('calcTs').value = (gram / ing.grPerTs).toFixed(1);
+    $('calcCup').value = (gram / (ing.grPerKopp * 0.948)).toFixed(2);
+}
+window.calcFromKopp = calcFromKopp;
+
+function calcFromCup() {
+    const ing = getSelectedIngredient();
+    if (!ing) return;
+    const cup = parseFloat($('calcCup')?.value) || 0;
+    const gram = cup * ing.grPerKopp * 0.948;
+    
+    $('calcGram').value = Math.round(gram);
+    $('calcDl').value = (gram / ing.grPerDl).toFixed(2);
+    $('calcSs').value = (gram / ing.grPerSs).toFixed(1);
+    $('calcTs').value = (gram / ing.grPerTs).toFixed(1);
+    $('calcKopp').value = (gram / ing.grPerKopp).toFixed(2);
+}
+window.calcFromCup = calcFromCup;
+
+function calcProduceFromGram() {
+    const select = $('produceSelect');
+    const produceName = select?.value;
+    if (!produceName) return;
+    
+    const produce = measurementData.produce[produceName];
+    const gram = parseFloat($('produceGram')?.value) || 0;
+    
+    const amount = gram / produce.avgWeight;
+    $('produceAmount').textContent = amount.toFixed(1);
+    $('produceUnit').textContent = produce.unit;
+    
+    $('produceInfo').innerHTML = \`
+        <p class="produce-avg">💡 Gjennomsnittlig vekt: ${produce.avgWeight}g per ${produce.unit}</p>
+    \`;
+}
+window.calcProduceFromGram = calcProduceFromGram;
+
+function updateProduceCalc() {
+    const select = $('produceSelect');
+    const produceName = select?.value;
+    if (!produceName) {
+        $('produceInfo').innerHTML = '';
+        return;
+    }
+    
+    const produce = measurementData.produce[produceName];
+    $('produceUnit').textContent = produce.unit;
+    $('produceInfo').innerHTML = \`
+        <p class="produce-avg">💡 1 ${produce.unit} ${produceName} veier ca. ${produce.avgWeight}g</p>
+    \`;
+    
+    calcProduceFromGram();
+}
+window.updateProduceCalc = updateProduceCalc;
+
+function convertWeight() {
+    const gram = parseFloat($('toolGram')?.value) || 0;
+    $('toolHg').value = (gram / 100).toFixed(1);
+    $('toolKg').value = (gram / 1000).toFixed(3);
+}
+window.convertWeight = convertWeight;
+
+function convertVolume() {
+    const ml = parseFloat($('toolMl')?.value) || 0;
+    $('toolDl').value = (ml / 100).toFixed(1);
+    $('toolL').value = (ml / 1000).toFixed(3);
+}
+window.convertVolume = convertVolume;
+
+function convertTemp() {
+    const celsius = parseFloat($('toolCelsius')?.value) || 0;
+    $('toolFahrenheit').value = Math.round(celsius * 9/5 + 32);
+}
+window.convertTemp = convertTemp;
+
+function setTemp(temp) {
+    $('toolCelsius').value = temp;
+    convertTemp();
+}
+window.setTemp = setTemp;
+
+// ===== AI MEAL PLANNER =====
+const aiMealPreferences = {
+    dietary: ['vanlig', 'vegetar', 'vegan', 'pescetarianer', 'lavkarbo', 'keto', 'glutenfri', 'laktosefri'],
+    goals: ['balansert', 'høy-protein', 'lav-karbo', 'lav-fett', 'høy-fiber', 'lite-ultraprosessert'],
+    budgets: ['budsjett', 'moderat', 'premium'],
+    cooking: ['rask (<30 min)', 'middels (30-60 min)', 'tidkrevende (60+ min)', 'miks']
+};
+
+function openAiMealPlanner() {
+    const html = \`
+        <div class="ai-meal-planner">
+            <div class="ai-header">
+                <span class="ai-icon">🤖✨</span>
+                <h3>AI Ukemenyplanlegger</h3>
+                <p>La AI'en lage den perfekte ukemenyen for deg!</p>
+            </div>
+            
+            <div class="ai-options">
+                <div class="option-section">
+                    <label>🥗 Kosthold</label>
+                    <select id="aiDietary">
+                        ${aiMealPreferences.dietary.map(d => \`<option value="\${d}">\${d.charAt(0).toUpperCase() + d.slice(1)}</option>\`).join('')}
+                    </select>
+                </div>
+                
+                <div class="option-section">
+                    <label>🎯 Mål</label>
+                    <select id="aiGoal">
+                        ${aiMealPreferences.goals.map(g => \`<option value="\${g}">\${g.charAt(0).toUpperCase() + g.slice(1).replace('-', ' ')}</option>\`).join('')}
+                    </select>
+                </div>
+                
+                <div class="option-section">
+                    <label>💰 Budsjett</label>
+                    <select id="aiBudget">
+                        ${aiMealPreferences.budgets.map(b => \`<option value="\${b}">\${b.charAt(0).toUpperCase() + b.slice(1)}</option>\`).join('')}
+                    </select>
+                </div>
+                
+                <div class="option-section">
+                    <label>⏱️ Koketid</label>
+                    <select id="aiCookTime">
+                        ${aiMealPreferences.cooking.map(c => \`<option value="\${c}">\${c}</option>\`).join('')}
+                    </select>
+                </div>
+                
+                <div class="option-section">
+                    <label>👥 Antall personer</label>
+                    <input type="number" id="aiPersons" min="1" max="12" value="${state.settings.householdSize || 2}">
+                </div>
+                
+                <div class="option-section">
+                    <label>📅 Antall dager</label>
+                    <select id="aiDays">
+                        <option value="5">5 dager (arbeidsuke)</option>
+                        <option value="7" selected>7 dager (hel uke)</option>
+                        <option value="14">14 dager (to uker)</option>
+                    </select>
+                </div>
+                
+                <div class="option-section full-width">
+                    <label>✨ Ekstra ønsker (valgfritt)</label>
+                    <textarea id="aiCustom" placeholder="F.eks: 'Inkluder taco på fredag', 'Unngå svinekjøtt', 'Mer asiatisk mat'..."></textarea>
+                </div>
+                
+                <div class="ai-checkboxes">
+                    <label class="ai-checkbox">
+                        <input type="checkbox" id="aiUseFavorites" checked>
+                        <span>Bruk mine favoritter</span>
+                    </label>
+                    <label class="ai-checkbox">
+                        <input type="checkbox" id="aiUseHistory" checked>
+                        <span>Lær av kokehistorikk</span>
+                    </label>
+                    <label class="ai-checkbox">
+                        <input type="checkbox" id="aiAvoidRepeat" checked>
+                        <span>Unngå gjentakelse</span>
+                    </label>
+                    <label class="ai-checkbox">
+                        <input type="checkbox" id="aiSeasonal">
+                        <span>Sesongbaserte råvarer</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="ai-actions">
+                <button class="btn btn-primary btn-large" onclick="generateAiMealPlan()">
+                    <span class="btn-icon">🤖</span>
+                    Generer ukesmeny
+                </button>
+                <button class="btn btn-secondary" onclick="generateAiMealPlan(true)">
+                    <span class="btn-icon">🎲</span>
+                    Overrask meg!
+                </button>
+            </div>
+            
+            <div id="aiMealPlanResult"></div>
+        </div>
+    \`;
+    
+    showModal('🤖 AI Ukemenyplanlegger', html, []);
+}
+window.openAiMealPlanner = openAiMealPlanner;
+
+function generateAiMealPlan(surprise = false) {
+    const dietary = $('aiDietary')?.value || 'vanlig';
+    const goal = $('aiGoal')?.value || 'balansert';
+    const budget = $('aiBudget')?.value || 'moderat';
+    const cookTime = $('aiCookTime')?.value || 'miks';
+    const persons = parseInt($('aiPersons')?.value) || 2;
+    const days = parseInt($('aiDays')?.value) || 7;
+    const customWishes = $('aiCustom')?.value || '';
+    const useFavorites = $('aiUseFavorites')?.checked;
+    const useHistory = $('aiUseHistory')?.checked;
+    const avoidRepeat = $('aiAvoidRepeat')?.checked;
+    const seasonal = $('aiSeasonal')?.checked;
+    
+    // Show loading
+    $('aiMealPlanResult').innerHTML = \`
+        <div class="ai-loading">
+            <div class="ai-thinking">
+                <span class="thinking-dot"></span>
+                <span class="thinking-dot"></span>
+                <span class="thinking-dot"></span>
+            </div>
+            <p>AI tenker på den perfekte ukemenyen for deg...</p>
+        </div>
+    \`;
+    
+    // Simulate AI processing
+    setTimeout(() => {
+        const plan = createSmartMealPlan({
+            dietary, goal, budget, cookTime, persons, days,
+            customWishes, useFavorites, useHistory, avoidRepeat, seasonal, surprise
+        });
+        
+        displayAiMealPlan(plan, days, persons);
+    }, 1500);
+}
+window.generateAiMealPlan = generateAiMealPlan;
+
+function createSmartMealPlan(options) {
+    const dayNames = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
+    const plan = [];
+    
+    // Get available recipes
+    let availableRecipes = [...state.recipes];
+    
+    // Add external/saved recipes if any
+    if (state.savedExternalRecipes) {
+        availableRecipes = [...availableRecipes, ...state.savedExternalRecipes];
+    }
+    
+    // If surprise mode, shuffle heavily
+    if (options.surprise) {
+        availableRecipes = shuffleArray(availableRecipes);
+    }
+    
+    // Prioritize favorites if enabled
+    if (options.useFavorites && state.favorites?.length > 0) {
+        availableRecipes.sort((a, b) => {
+            const aFav = state.favorites.includes(a.id) ? 1 : 0;
+            const bFav = state.favorites.includes(b.id) ? 1 : 0;
+            return bFav - aFav;
+        });
+    }
+    
+    // Filter by dietary
+    if (options.dietary !== 'vanlig') {
+        availableRecipes = availableRecipes.filter(r => {
+            const name = (r.name + ' ' + (r.category || '')).toLowerCase();
+            switch (options.dietary) {
+                case 'vegetar': return name.includes('vegetar') || !containsMeat(r);
+                case 'vegan': return name.includes('vegan') || (!containsMeat(r) && !containsDairy(r));
+                case 'pescetarianer': return name.includes('fisk') || name.includes('sjømat') || !containsMeat(r);
+                case 'lavkarbo': case 'keto': return !name.includes('pasta') && !name.includes('ris') && !name.includes('brød');
+                default: return true;
+            }
+        });
+    }
+    
+    // Get cooking history to avoid recent meals
+    const history = JSON.parse(localStorage.getItem('kokebok_cooking_history') || '[]');
+    const recentRecipes = history.slice(0, 14).map(h => h.recipeId);
+    
+    // Create day plan
+    const usedRecipes = new Set();
+    
+    for (let i = 0; i < options.days; i++) {
+        const dayName = dayNames[i % 7];
+        let selectedRecipe = null;
+        
+        // Special day logic
+        const isWeekend = dayName === 'Lørdag' || dayName === 'Søndag';
+        const isFriday = dayName === 'Fredag';
+        
+        // Filter candidates
+        let candidates = availableRecipes.filter(r => {
+            if (options.avoidRepeat && usedRecipes.has(r.id)) return false;
+            if (options.avoidRepeat && recentRecipes.includes(r.id)) return false;
+            return true;
+        });
+        
+        // Custom wishes parsing
+        if (options.customWishes) {
+            const wishes = options.customWishes.toLowerCase();
+            if (isFriday && wishes.includes('taco')) {
+                const tacoRecipe = candidates.find(r => r.name.toLowerCase().includes('taco'));
+                if (tacoRecipe) selectedRecipe = tacoRecipe;
+            }
+        }
+        
+        // Weekend: suggest more elaborate meals
+        if (!selectedRecipe && isWeekend && options.cookTime === 'miks') {
+            candidates = candidates.filter(r => 
+                (r.prepTime && parseInt(r.prepTime) > 30) || 
+                (r.cookTime && parseInt(r.cookTime) > 30) ||
+                r.name.toLowerCase().includes('gryterett') ||
+                r.name.toLowerCase().includes('stek')
+            );
+        }
+        
+        // Budget filtering
+        if (options.budget === 'budsjett') {
+            candidates = candidates.filter(r => {
+                const cost = estimateRecipeCost(r);
+                return cost < 100;
+            });
+        }
+        
+        // Protein goal - prioritize meat/fish
+        if (options.goal === 'høy-protein') {
+            candidates.sort((a, b) => {
+                const aProtein = containsMeat(a) || (a.name + '').toLowerCase().includes('fisk') ? 1 : 0;
+                const bProtein = containsMeat(b) || (b.name + '').toLowerCase().includes('fisk') ? 1 : 0;
+                return bProtein - aProtein;
+            });
+        }
+        
+        // Select recipe
+        if (!selectedRecipe && candidates.length > 0) {
+            // Add some randomness
+            const topCandidates = candidates.slice(0, Math.min(5, candidates.length));
+            selectedRecipe = topCandidates[Math.floor(Math.random() * topCandidates.length)];
+        }
+        
+        // Fallback
+        if (!selectedRecipe && availableRecipes.length > 0) {
+            selectedRecipe = availableRecipes[Math.floor(Math.random() * availableRecipes.length)];
+        }
+        
+        if (selectedRecipe) {
+            usedRecipes.add(selectedRecipe.id);
+            plan.push({
+                day: dayName,
+                recipe: selectedRecipe,
+                isWeekend,
+                estimatedCost: estimateRecipeCost(selectedRecipe),
+                prepTime: selectedRecipe.prepTime || '30 min'
+            });
+        } else {
+            plan.push({
+                day: dayName,
+                recipe: { name: 'Legg til oppskrift', id: null },
+                isWeekend,
+                estimatedCost: 0,
+                prepTime: '-'
+            });
+        }
+    }
+    
+    return plan;
+}
+
+function containsMeat(recipe) {
+    const meatWords = ['kjøtt', 'kylling', 'svin', 'beef', 'biff', 'lam', 'bacon', 'pølse', 'deig', 'ribbe'];
+    const text = (recipe.name + ' ' + JSON.stringify(recipe.ingredients || [])).toLowerCase();
+    return meatWords.some(w => text.includes(w));
+}
+
+function containsDairy(recipe) {
+    const dairyWords = ['melk', 'ost', 'fløte', 'smør', 'rømme', 'yoghurt'];
+    const text = (recipe.name + ' ' + JSON.stringify(recipe.ingredients || [])).toLowerCase();
+    return dairyWords.some(w => text.includes(w));
+}
+
+function shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+}
+
+function displayAiMealPlan(plan, days, persons) {
+    const totalCost = plan.reduce((sum, day) => sum + day.estimatedCost, 0) * (persons / 4);
+    
+    const resultHtml = \`
+        <div class="ai-result">
+            <div class="ai-result-header">
+                <h4>✨ Din personlige ukesmeny</h4>
+                <div class="ai-stats">
+                    <span class="ai-stat">📅 ${days} dager</span>
+                    <span class="ai-stat">👥 ${persons} personer</span>
+                    <span class="ai-stat">💰 ca. ${Math.round(totalCost)} kr</span>
+                </div>
+            </div>
+            
+            <div class="ai-plan-grid">
+                ${plan.map((day, i) => \`
+                    <div class="ai-day-card \${day.isWeekend ? 'weekend' : ''}">
+                        <div class="ai-day-header">
+                            <span class="day-name">\${day.day}</span>
+                            ${day.isWeekend ? '<span class="weekend-badge">🌟</span>' : ''}
+                        </div>
+                        <div class="ai-day-content">
+                            ${day.recipe.id ? \`
+                                <span class="ai-recipe-name">\${escapeHtml(day.recipe.name)}</span>
+                                <div class="ai-recipe-meta">
+                                    <span>⏱️ \${day.prepTime}</span>
+                                    <span>💰 ~\${day.estimatedCost} kr</span>
+                                </div>
+                            \` : \`
+                                <span class="ai-no-recipe">Ingen oppskrift</span>
+                            \`}
+                        </div>
+                        ${day.recipe.id ? \`
+                            <button class="ai-view-btn" onclick="viewRecipe('\${day.recipe.id}'); closeGenericModal();">
+                                Se oppskrift →
+                            </button>
+                        \` : ''}
+                    </div>
+                \`).join('')}
+            </div>
+            
+            <div class="ai-actions-bottom">
+                <button class="btn btn-success" onclick="applyAiPlanToCalendar()">
+                    ✅ Legg til i ukesplanen
+                </button>
+                <button class="btn btn-secondary" onclick="generateAiMealPlan()">
+                    🔄 Generer ny
+                </button>
+                <button class="btn btn-secondary" onclick="copyWeekPlan()">
+                    📋 Kopier uke
+                </button>
+            </div>
+        </div>
+    \`;
+    
+    $('aiMealPlanResult').innerHTML = resultHtml;
+    
+    // Store plan for applying later
+    window.currentAiPlan = plan;
+}
+
+function applyAiPlanToCalendar() {
+    if (!window.currentAiPlan) return;
+    
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+    
+    window.currentAiPlan.forEach((day, i) => {
+        if (day.recipe.id) {
+            const date = new Date(startOfWeek);
+            date.setDate(startOfWeek.getDate() + i);
+            const dateKey = date.toISOString().split('T')[0];
+            
+            state.mealPlan[dateKey] = {
+                name: day.recipe.name,
+                recipeId: day.recipe.id,
+                ingredients: day.recipe.ingredients || []
+            };
+        }
+    });
+    
+    saveMealPlan();
+    showToast('Ukesmeny lagt til!', 'success');
+    closeGenericModal();
+}
+window.applyAiPlanToCalendar = applyAiPlanToCalendar;
+
+function copyWeekPlan() {
+    if (!window.currentAiPlan) return;
+    
+    // Store as template
+    localStorage.setItem('kokebok_week_template', JSON.stringify(window.currentAiPlan));
+    showToast('Ukesmeny lagret som mal!', 'success');
+}
+window.copyWeekPlan = copyWeekPlan;
+
+function pasteWeekPlan() {
+    const template = localStorage.getItem('kokebok_week_template');
+    if (!template) {
+        showToast('Ingen ukesmeny lagret', 'warning');
+        return;
+    }
+    
+    window.currentAiPlan = JSON.parse(template);
+    applyAiPlanToCalendar();
+}
+window.pasteWeekPlan = pasteWeekPlan;
+
+// ===== MATKALENDER / COOKING DIARY =====
+function openCookingDiary() {
+    // Get all cooking history
+    const history = JSON.parse(localStorage.getItem('kokebok_cooking_history') || '[]');
+    
+    // Group by month
+    const byMonth = {};
+    history.forEach(entry => {
+        const date = new Date(entry.date);
+        const monthKey = \`\${date.getFullYear()}-\${String(date.getMonth() + 1).padStart(2, '0')}\`;
+        if (!byMonth[monthKey]) byMonth[monthKey] = [];
+        byMonth[monthKey].push(entry);
+    });
+    
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    
+    const html = \`
+        <div class="cooking-diary">
+            <div class="diary-header">
+                <button class="btn-icon" onclick="changeCalendarMonth(-1)">◀</button>
+                <h3 id="diaryMonthTitle">\${formatMonthYear(currentMonth)}</h3>
+                <button class="btn-icon" onclick="changeCalendarMonth(1)">▶</button>
+            </div>
+            
+            <div id="diaryCalendar" class="diary-calendar">
+                \${renderDiaryCalendar(currentMonth, history)}
+            </div>
+            
+            <div class="diary-stats">
+                <h4>📊 Statistikk</h4>
+                <div class="diary-stat-grid">
+                    <div class="diary-stat">
+                        <span class="stat-value">\${history.length}</span>
+                        <span class="stat-label">Måltider laget</span>
+                    </div>
+                    <div class="diary-stat">
+                        <span class="stat-value">\${new Set(history.map(h => h.recipeId)).size}</span>
+                        <span class="stat-label">Unike oppskrifter</span>
+                    </div>
+                    <div class="diary-stat">
+                        <span class="stat-value">\${Object.keys(byMonth).length}</span>
+                        <span class="stat-label">Måneder med data</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="diary-recent">
+                <h4>🕐 Siste måltider</h4>
+                <div class="recent-meals-list">
+                    \${history.slice(0, 10).map(entry => {
+                        const recipe = state.recipes.find(r => r.id === entry.recipeId);
+                        const date = new Date(entry.date);
+                        return \`
+                            <div class="recent-meal-item">
+                                <span class="meal-date">\${date.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })}</span>
+                                <span class="meal-name">\${recipe ? escapeHtml(recipe.name) : 'Ukjent oppskrift'}</span>
+                                \${recipe ? \`<button class="btn-sm" onclick="viewRecipe('\${recipe.id}'); closeGenericModal();">Se</button>\` : ''}
+                            </div>
+                        \`;
+                    }).join('')}
+                </div>
+            </div>
+        </div>
+    \`;
+    
+    showModal('📅 Matkalender', html, []);
+    
+    window.currentDiaryMonth = currentMonth;
+}
+window.openCookingDiary = openCookingDiary;
+
+function renderDiaryCalendar(monthKey, history) {
+    const [year, month] = monthKey.split('-').map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+    const startDay = (firstDay.getDay() + 6) % 7; // Monday = 0
+    
+    const daysInMonth = lastDay.getDate();
+    const today = new Date();
+    
+    // Get meals for this month
+    const monthMeals = {};
+    history.forEach(entry => {
+        const date = new Date(entry.date);
+        if (date.getFullYear() === year && date.getMonth() === month - 1) {
+            const dayKey = date.getDate();
+            if (!monthMeals[dayKey]) monthMeals[dayKey] = [];
+            monthMeals[dayKey].push(entry);
+        }
+    });
+    
+    let html = '<div class="calendar-header">';
+    ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'].forEach(day => {
+        html += \`<span class="cal-day-name">\${day}</span>\`;
+    });
+    html += '</div><div class="calendar-grid">';
+    
+    // Empty cells before first day
+    for (let i = 0; i < startDay; i++) {
+        html += '<div class="cal-day empty"></div>';
+    }
+    
+    // Day cells
+    for (let day = 1; day <= daysInMonth; day++) {
+        const isToday = today.getFullYear() === year && today.getMonth() === month - 1 && today.getDate() === day;
+        const meals = monthMeals[day] || [];
+        const hasMeals = meals.length > 0;
+        
+        html += \`
+            <div class="cal-day \${isToday ? 'today' : ''} \${hasMeals ? 'has-meals' : ''}" 
+                 onclick="showDayMeals(\${year}, \${month}, \${day})"
+                 title="\${hasMeals ? meals.length + ' måltid(er)' : 'Ingen måltider'}">
+                <span class="day-number">\${day}</span>
+                \${hasMeals ? \`<span class="meal-dot">\${meals.length}</span>\` : ''}
+            </div>
+        \`;
+    }
+    
+    html += '</div>';
+    return html;
+}
+
+function formatMonthYear(monthKey) {
+    const [year, month] = monthKey.split('-');
+    const months = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 
+                    'Juli', 'August', 'September', 'Oktober', 'November', 'Desember'];
+    return \`\${months[parseInt(month) - 1]} \${year}\`;
+}
+
+function changeCalendarMonth(delta) {
+    const [year, month] = window.currentDiaryMonth.split('-').map(Number);
+    const newDate = new Date(year, month - 1 + delta, 1);
+    window.currentDiaryMonth = newDate.toISOString().slice(0, 7);
+    
+    const history = JSON.parse(localStorage.getItem('kokebok_cooking_history') || '[]');
+    $('diaryMonthTitle').textContent = formatMonthYear(window.currentDiaryMonth);
+    $('diaryCalendar').innerHTML = renderDiaryCalendar(window.currentDiaryMonth, history);
+}
+window.changeCalendarMonth = changeCalendarMonth;
+
+function showDayMeals(year, month, day) {
+    const history = JSON.parse(localStorage.getItem('kokebok_cooking_history') || '[]');
+    const dayMeals = history.filter(entry => {
+        const date = new Date(entry.date);
+        return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+    });
+    
+    if (dayMeals.length === 0) {
+        showToast('Ingen måltider registrert denne dagen', 'info');
+        return;
+    }
+    
+    const dateStr = new Date(year, month - 1, day).toLocaleDateString('no-NO', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+    
+    const mealsHtml = dayMeals.map(entry => {
+        const recipe = state.recipes.find(r => r.id === entry.recipeId);
+        return \`
+            <div class="day-meal-card">
+                <span class="meal-icon">🍽️</span>
+                <span class="meal-name">\${recipe ? escapeHtml(recipe.name) : 'Ukjent oppskrift'}</span>
+                \${recipe ? \`<button class="btn btn-sm" onclick="viewRecipe('\${recipe.id}'); closeGenericModal();">Se oppskrift</button>\` : ''}
+            </div>
+        \`;
+    }).join('');
+    
+    // Show in a sub-modal or toast
+    showModal(\`📅 \${dateStr}\`, \`<div class="day-meals-detail">\${mealsHtml}</div>\`, []);
+}
+window.showDayMeals = showDayMeals;
+
+// ===== MARK RECIPE AS COOKED =====
+function markAsCooked(recipeId) {
+    const recipe = state.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    
+    // Log to cooking history
+    logCookingSession(recipeId);
+    
+    // Update last cooked date
+    recipe.lastCooked = new Date().toISOString();
+    recipe.cookCount = (recipe.cookCount || 0) + 1;
+    saveToFirestore('recipes', recipeId, recipe);
+    
+    showToast(\`✅ "\${recipe.name}" registrert som laget!\`, 'success');
+    checkAchievements();
+}
+window.markAsCooked = markAsCooked;

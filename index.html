@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=3.3">
+    <link rel="stylesheet" href="style.css?v=3.4">
 </head>
 <body>
     <!-- Login Screen -->
@@ -243,6 +243,12 @@
                 </div>
                 <div id="recipeContent" class="recipe-content">
                     <!-- Recipe content rendered here -->
+                </div>
+                <!-- Mark as Cooked Button -->
+                <div class="mark-cooked-section">
+                    <button id="markCookedBtn" class="mark-cooked-btn" onclick="markAsCooked(state.currentRecipe?.id)">
+                        <span class="icon">✅</span> Ferdig laget!
+                    </button>
                 </div>
                 <!-- Premium Recipe Actions -->
                 <div class="premium-actions">
@@ -621,21 +627,23 @@
                 </button>
                 <button class="menu-item" onclick="openWhatCanIMake(); toggleSideMenu(false);">
                     <span>🧊</span> Hva kan jeg lage?
-                    <span class="menu-badge new">Ny!</span>
                 </button>
                 <button class="menu-item" onclick="openQuickRecipeFromText(); toggleSideMenu(false);">
                     <span>📝</span> Lim inn oppskrift
+                </button>
+                <button class="menu-item" onclick="openUrlImport(); toggleSideMenu(false);">
+                    <span>🔗</span> Importer fra URL
                     <span class="menu-badge new">Ny!</span>
                 </button>
                 <button class="menu-item" id="menuMealPlanner">
                     <span>📅</span> Ukemeny
                 </button>
-                <button class="menu-item" onclick="getWeeklySuggestions(); toggleSideMenu(false);">
-                    <span>💡</span> Ukens forslag
+                <button class="menu-item" onclick="openAiMealPlanner(); toggleSideMenu(false);">
+                    <span>🤖</span> AI Ukemenyplanlegger
+                    <span class="menu-badge premium">Premium</span>
                 </button>
                 <button class="menu-item" onclick="openMealPrepAssistant(); toggleSideMenu(false);">
                     <span>🥡</span> Meal Prep
-                    <span class="menu-badge premium">Premium</span>
                 </button>
                 
                 <hr class="menu-divider">
@@ -646,16 +654,22 @@
                 </button>
                 <button class="menu-item" onclick="optimizeGroceryList(); toggleSideMenu(false);">
                     <span>🗂️</span> Smart handleliste
-                    <span class="menu-badge premium">Premium</span>
                 </button>
                 <button class="menu-item" onclick="openBudgetPlanner(); toggleSideMenu(false);">
                     <span>💵</span> Ukesbudsjett
-                    <span class="menu-badge premium">Premium</span>
                 </button>
                 
                 <hr class="menu-divider">
                 <div class="menu-section-title">📊 Verktøy</div>
                 
+                <button class="menu-item" onclick="openMeasurementCalculator(); toggleSideMenu(false);">
+                    <span>📐</span> Mål og vekt-kalkulator
+                    <span class="menu-badge new">Ny!</span>
+                </button>
+                <button class="menu-item" onclick="openCookingDiary(); toggleSideMenu(false);">
+                    <span>📅</span> Matkalender
+                    <span class="menu-badge new">Ny!</span>
+                </button>
                 <button class="menu-item" id="menuTimer">
                     <span>⏱️</span> Koketimer
                 </button>
@@ -664,7 +678,6 @@
                 </button>
                 <button class="menu-item" onclick="showHouseholdSelector(); toggleSideMenu(false);">
                     <span>🏠</span> Velg husstand
-                    <span class="menu-badge new">Ny!</span>
                 </button>
                 <button class="menu-item" onclick="showTopRatedRecipes(); toggleSideMenu(false);">
                     <span>⭐</span> Toppratede
@@ -1012,6 +1025,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js?v=3.2"></script>
-    <script src="app.js?v=3.3"></script>
+    <script src="app.js?v=3.4"></script>
 </body>
 </html>

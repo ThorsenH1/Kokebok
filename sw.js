@@ -1,10 +1,10 @@
-// Service Worker for Familiens Kokebok v3.3
-const CACHE_NAME = 'kokebok-v3.3';
+// Service Worker for Familiens Kokebok v3.4
+const CACHE_NAME = 'kokebok-v3.4';
 const ASSETS = [
     './',
     './index.html',
-    './style.css?v=3.3',
-    './app.js?v=3.3',
+    './style.css?v=3.4',
+    './app.js?v=3.4',
     './firebase-config.js',
     './manifest.json'
 ];

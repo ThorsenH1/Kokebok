@@ -1,8 +1,8 @@
 {
     "name": "Familiens Kokebok",
     "short_name": "Kokebok",
-    "description": "Digitaliser og bevar familiens oppskrifter. Med måltidsplanlegger, handleliste, kokemodus, prissammenligning og mer!",
-    "version": "3.3.0",
+    "description": "Digitaliser og bevar familiens oppskrifter. Med AI måltidsplanlegger, URL-import, mål og vekt-kalkulator, matkalender og mer!",
+    "version": "3.4.0",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#FDF5E6",

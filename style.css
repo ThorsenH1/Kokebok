@@ -5898,3 +5898,981 @@ body.font-large { font-size: 18px; }
     background: var(--bg);
 }
 
+/* =========================================
+   URL IMPORT STYLES
+   ========================================= */
+
+.url-import {
+    text-align: center;
+}
+
+.url-import h3 {
+    margin-bottom: 0.5rem;
+}
+
+.url-import p {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+}
+
+.url-input-container {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.url-input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    background: var(--bg-input);
+}
+
+.url-input:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.1);
+}
+
+.supported-sites {
+    text-align: left;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
+}
+
+.supported-sites p {
+    margin-bottom: 0.75rem;
+    color: var(--text);
+}
+
+.site-logos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.site-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-light);
+}
+
+.import-loading {
+    padding: 2rem;
+    text-align: center;
+}
+
+.import-loading .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+.import-error {
+    padding: 1rem;
+    background: #fee;
+    border-radius: var(--radius);
+    color: var(--danger);
+}
+
+.import-error span {
+    font-size: 1.5rem;
+}
+
+.import-error .hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+.import-preview {
+    padding: 1.5rem;
+    background: #e8f5e9;
+    border-radius: var(--radius);
+    text-align: center;
+}
+
+.import-preview h4 {
+    color: var(--success);
+    margin-bottom: 1rem;
+}
+
+.preview-card {
+    background: white;
+    padding: 1rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+}
+
+.preview-card strong {
+    font-size: 1.1rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.preview-card p {
+    margin: 0.25rem 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* =========================================
+   MEASUREMENT CALCULATOR STYLES
+   ========================================= */
+
+.measurement-calculator {
+    padding: 0.5rem 0;
+}
+
+.calc-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-light);
+    padding-bottom: 0.5rem;
+}
+
+.calc-tab {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.calc-tab:hover {
+    background: var(--bg);
+}
+
+.calc-tab.active {
+    background: var(--primary);
+    color: white;
+}
+
+.calc-content {
+    display: none;
+}
+
+.calc-content.active {
+    display: block;
+}
+
+.calc-content h4 {
+    margin-bottom: 0.5rem;
+}
+
+.calc-content p {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.calc-row {
+    margin-bottom: 1.5rem;
+}
+
+.calc-row select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    background: var(--bg-input);
+}
+
+.calc-input-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 600px) {
+    .calc-input-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.calc-input-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.calc-input-item label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.calc-input-item input {
+    padding: 10px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+    text-align: center;
+    background: var(--bg-input);
+}
+
+.calc-input-item input:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.produce-calc-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.produce-input {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.produce-input label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.produce-input input {
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.calc-equals {
+    font-size: 1.5rem;
+    color: var(--text-muted);
+}
+
+.produce-result {
+    flex: 1;
+    text-align: center;
+    padding: 1rem;
+    background: var(--accent-light);
+    border-radius: var(--radius);
+}
+
+.produce-result #produceAmount {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.produce-result #produceUnit {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.produce-info {
+    text-align: center;
+    padding: 0.5rem;
+}
+
+.produce-avg {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.tool-section {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.tool-section h5 {
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+}
+
+.tool-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.tool-row input {
+    width: 80px;
+    padding: 8px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    font-size: 1rem;
+}
+
+.tool-row input:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.tool-row input[readonly] {
+    background: var(--accent-light);
+    font-weight: 600;
+}
+
+.tool-row span {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.temp-presets {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.temp-presets button {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: white;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.temp-presets button:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.quick-reference {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.quick-reference h5 {
+    margin-bottom: 0.75rem;
+}
+
+.ref-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.ref-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+}
+
+.ref-icon {
+    font-size: 1.1rem;
+}
+
+/* =========================================
+   AI MEAL PLANNER STYLES
+   ========================================= */
+
+.ai-meal-planner {
+    padding: 0.5rem 0;
+}
+
+.ai-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.ai-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.ai-header h3 {
+    margin-bottom: 0.25rem;
+}
+
+.ai-header p {
+    color: var(--text-muted);
+}
+
+.ai-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 500px) {
+    .ai-options {
+        grid-template-columns: 1fr;
+    }
+}
+
+.option-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.option-section.full-width {
+    grid-column: 1 / -1;
+}
+
+.option-section label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.option-section select,
+.option-section input,
+.option-section textarea {
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    background: var(--bg-input);
+}
+
+.option-section select:focus,
+.option-section input:focus,
+.option-section textarea:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.option-section textarea {
+    min-height: 60px;
+    resize: vertical;
+}
+
+.ai-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.ai-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.ai-checkbox input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+}
+
+.ai-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+}
+
+.btn-large {
+    padding: 14px 28px;
+    font-size: 1.1rem;
+}
+
+.ai-loading {
+    padding: 3rem;
+    text-align: center;
+}
+
+.ai-thinking {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.thinking-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+    border-radius: 50%;
+    animation: thinkBounce 1.4s infinite ease-in-out both;
+}
+
+.thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+.thinking-dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes thinkBounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+.ai-result {
+    animation: fadeIn 0.3s ease;
+}
+
+.ai-result-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.ai-result-header h4 {
+    margin-bottom: 0.5rem;
+}
+
+.ai-stats {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.ai-stat {
+    padding: 4px 12px;
+    background: var(--bg);
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+
+.ai-plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.ai-day-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.ai-day-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+}
+
+.ai-day-card.weekend {
+    border-color: var(--accent);
+    background: linear-gradient(to bottom, var(--accent-light), var(--bg-card));
+}
+
+.ai-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--primary);
+    color: white;
+}
+
+.ai-day-card.weekend .ai-day-header {
+    background: var(--secondary);
+}
+
+.day-name {
+    font-weight: 600;
+}
+
+.weekend-badge {
+    font-size: 1rem;
+}
+
+.ai-day-content {
+    padding: 1rem;
+    min-height: 80px;
+}
+
+.ai-recipe-name {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+}
+
+.ai-recipe-meta {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.ai-no-recipe {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ai-view-btn {
+    display: block;
+    width: 100%;
+    padding: 0.5rem;
+    border: none;
+    background: var(--bg);
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+
+.ai-view-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.ai-actions-bottom {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* =========================================
+   COOKING DIARY / CALENDAR STYLES
+   ========================================= */
+
+.cooking-diary {
+    padding: 0.5rem 0;
+}
+
+.diary-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.diary-header h3 {
+    min-width: 180px;
+    text-align: center;
+}
+
+.diary-header .btn-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg-card);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.diary-header .btn-icon:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.diary-calendar {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-light);
+}
+
+.calendar-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.cal-day-name {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 0.5rem 0;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+}
+
+.cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    position: relative;
+    background: var(--bg);
+    transition: all 0.2s;
+}
+
+.cal-day:hover {
+    background: var(--accent-light);
+}
+
+.cal-day.empty {
+    background: transparent;
+    cursor: default;
+}
+
+.cal-day.today {
+    background: var(--primary);
+    color: white;
+}
+
+.cal-day.today:hover {
+    background: var(--primary-dark);
+}
+
+.cal-day.has-meals {
+    background: var(--success);
+    color: white;
+}
+
+.cal-day.has-meals.today {
+    background: linear-gradient(135deg, var(--primary), var(--success));
+}
+
+.day-number {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.meal-dot {
+    position: absolute;
+    bottom: 2px;
+    font-size: 0.65rem;
+    font-weight: bold;
+    background: white;
+    color: var(--success);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.diary-stats {
+    margin-bottom: 1.5rem;
+}
+
+.diary-stats h4 {
+    margin-bottom: 0.75rem;
+}
+
+.diary-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+
+@media (max-width: 500px) {
+    .diary-stat-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.diary-stat {
+    text-align: center;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.diary-stat .stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.diary-stat .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.diary-recent h4 {
+    margin-bottom: 0.75rem;
+}
+
+.recent-meals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.recent-meal-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.recent-meal-item .meal-date {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-width: 60px;
+}
+
+.recent-meal-item .meal-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.btn-sm {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    border: 1px solid var(--primary);
+    background: transparent;
+    color: var(--primary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-sm:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.day-meals-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.day-meal-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.day-meal-card .meal-icon {
+    font-size: 1.5rem;
+}
+
+.day-meal-card .meal-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+/* Mark as Cooked Button */
+.mark-cooked-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 10px 20px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.mark-cooked-btn:hover {
+    background: #1e8e3e;
+    transform: scale(1.02);
+}
+
+.mark-cooked-btn .icon {
+    font-size: 1.2rem;
+}
+
+/* Dark mode additions */
+.dark-mode .url-input,
+.dark-mode .calc-row select,
+.dark-mode .calc-input-item input,
+.dark-mode .produce-input input,
+.dark-mode .tool-row input,
+.dark-mode .option-section select,
+.dark-mode .option-section input,
+.dark-mode .option-section textarea {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.dark-mode .supported-sites,
+.dark-mode .tool-section,
+.dark-mode .quick-reference,
+.dark-mode .ai-checkboxes,
+.dark-mode .ai-stat,
+.dark-mode .diary-stat,
+.dark-mode .recent-meal-item,
+.dark-mode .day-meal-card,
+.dark-mode .cal-day {
+    background: var(--bg);
+}
+
+.dark-mode .diary-calendar,
+.dark-mode .ai-day-card,
+.dark-mode .ref-item,
+.dark-mode .site-tag,
+.dark-mode .preview-card {
+    background: var(--bg-card);
+}
+
+.dark-mode .temp-presets button,
+.dark-mode .diary-header .btn-icon {
+    background: var(--bg-card);
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.dark-mode .produce-result {
+    background: var(--primary-dark);
+}
+
+.dark-mode .produce-result #produceAmount {
+    color: var(--accent-light);
+}
+
+/* Mark as Cooked Section */
+.mark-cooked-section {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border-light);
+}
+
+
