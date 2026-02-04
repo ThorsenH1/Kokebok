@@ -5,7 +5,7 @@
 // 100% privat - ingen AI lærer av dine oppskrifter
 // ==========================================
 
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.1.0';
 
 // ===== Firebase Initialization =====
 firebase.initializeApp(firebaseConfig);
@@ -1943,7 +1943,7 @@ async function openRecipeSearch() {
     const modal = $('recipeSearchModal');
     if (modal) {
         modal.classList.remove('hidden');
-        const searchInput = $('apiSearchInput');
+        const searchInput = $('recipeSearchInput');
         if (searchInput) searchInput.focus();
         
         // Setup events
@@ -1959,9 +1959,9 @@ function closeRecipeSearch() {
 function setupRecipeSearchEvents() {
     const closeBtn = $('closeRecipeSearchBtn');
     const overlay = document.querySelector('#recipeSearchModal .feature-modal-overlay');
-    const searchBtn = $('apiSearchBtn');
-    const searchInput = $('apiSearchInput');
-    const categoryFilter = $('apiCategoryFilter');
+    const searchBtn = $('doRecipeSearchBtn');
+    const searchInput = $('recipeSearchInput');
+    const categoryFilter = $('searchCategoryFilter');
     
     if (closeBtn) closeBtn.onclick = closeRecipeSearch;
     if (overlay) overlay.onclick = closeRecipeSearch;
@@ -1976,8 +1976,8 @@ function setupRecipeSearchEvents() {
 }
 
 async function performRecipeSearch() {
-    const searchInput = $('apiSearchInput');
-    const resultsContainer = $('apiSearchResults');
+    const searchInput = $('recipeSearchInput');
+    const resultsContainer = $('searchResults');
     const query = searchInput?.value?.trim();
     
     if (!query) {
@@ -2004,7 +2004,7 @@ async function performRecipeSearch() {
                 <div class="search-placeholder">
                     <span>🤷</span>
                     <p>Ingen oppskrifter funnet for "${escapeHtml(query)}"</p>
-                    <p>Prøv et annet søkeord</p>
+                    <p>Prøv et annet søkeord på engelsk (f.eks. "chicken", "pasta")</p>
                 </div>
             `;
         }
@@ -2020,8 +2020,8 @@ async function performRecipeSearch() {
 }
 
 async function performCategorySearch() {
-    const categoryFilter = $('apiCategoryFilter');
-    const resultsContainer = $('apiSearchResults');
+    const categoryFilter = $('searchCategoryFilter');
+    const resultsContainer = $('searchResults');
     const category = categoryFilter?.value;
     
     if (!category) return;
@@ -2067,7 +2067,7 @@ async function performCategorySearch() {
 }
 
 function renderSearchResults(meals) {
-    const resultsContainer = $('apiSearchResults');
+    const resultsContainer = $('searchResults');
     
     resultsContainer.innerHTML = meals.map(meal => `
         <div class="search-result-card" data-meal-id="${meal.idMeal}">
@@ -2917,3 +2917,587 @@ window.openTimer = openTimer;
 window.openLanguageSelector = openLanguageSelector;
 window.openPortionCalculator = openPortionCalculator;
 window.toggleFavorite = toggleFavorite;
+
+// ===== V3.1 PREMIUM FEATURES =====
+
+// ===== RANDOM RECIPE ("Hva skal vi ha i dag?") =====
+function getRandomRecipe() {
+    if (state.recipes.length === 0) {
+        showToast('Du har ingen oppskrifter ennå! Legg til noen først 😊', 'warning');
+        return;
+    }
+    
+    const randomIndex = Math.floor(Math.random() * state.recipes.length);
+    const recipe = state.recipes[randomIndex];
+    
+    // Show celebration
+    triggerConfetti();
+    
+    state.currentRecipe = recipe;
+    navigateTo('recipeView');
+    
+    showToast(`🎲 Forslag: ${recipe.name}!`, 'success');
+}
+
+// ===== RECIPE RATING SYSTEM =====
+async function rateRecipe(recipeId, rating) {
+    const recipe = state.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    
+    recipe.rating = rating;
+    await saveToFirestore('recipes', recipeId, { rating });
+    
+    showToast(`⭐ ${rating}/5 stjerner!`, 'success');
+    
+    if (state.currentView === 'recipeView') {
+        renderRecipeView();
+    }
+}
+
+// ===== COOKING MODE (Fullscreen step-by-step) =====
+function startCookingMode() {
+    if (!state.currentRecipe) return;
+    
+    const recipe = state.currentRecipe;
+    const steps = recipe.instructions?.split('\n').filter(s => s.trim()) || [];
+    
+    if (steps.length === 0) {
+        showToast('Ingen fremgangsmåte å vise', 'warning');
+        return;
+    }
+    
+    // Create cooking mode overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'cookingModeOverlay';
+    overlay.className = 'cooking-mode-overlay';
+    
+    let currentStep = 0;
+    
+    const renderStep = () => {
+        overlay.innerHTML = `
+            <div class="cooking-mode-content">
+                <div class="cooking-mode-header">
+                    <h2>👨‍🍳 ${escapeHtml(recipe.name)}</h2>
+                    <button class="cooking-mode-close" onclick="exitCookingMode()">✕</button>
+                </div>
+                <div class="cooking-mode-step-indicator">
+                    Steg ${currentStep + 1} av ${steps.length}
+                </div>
+                <div class="cooking-mode-progress">
+                    <div class="cooking-mode-progress-fill" style="width: ${((currentStep + 1) / steps.length) * 100}%"></div>
+                </div>
+                <div class="cooking-mode-instruction">
+                    ${escapeHtml(steps[currentStep])}
+                </div>
+                <div class="cooking-mode-nav">
+                    <button class="cooking-mode-btn" ${currentStep === 0 ? 'disabled' : ''} onclick="cookingModePrev()">
+                        ◀ Forrige
+                    </button>
+                    <button class="cooking-mode-timer-btn" onclick="openTimer()">
+                        ⏱️ Timer
+                    </button>
+                    ${currentStep === steps.length - 1 
+                        ? `<button class="cooking-mode-btn done" onclick="exitCookingMode(); triggerConfetti(); showToast('🎉 Gratulerer! Måltidet er ferdig!', 'success');">
+                            ✓ Ferdig!
+                        </button>`
+                        : `<button class="cooking-mode-btn" onclick="cookingModeNext()">
+                            Neste ▶
+                        </button>`
+                    }
+                </div>
+            </div>
+        `;
+    };
+    
+    window.cookingModePrev = () => {
+        if (currentStep > 0) {
+            currentStep--;
+            renderStep();
+        }
+    };
+    
+    window.cookingModeNext = () => {
+        if (currentStep < steps.length - 1) {
+            currentStep++;
+            renderStep();
+        }
+    };
+    
+    window.exitCookingMode = () => {
+        overlay.remove();
+        // Wake lock release
+        if (window.wakeLock) {
+            window.wakeLock.release();
+        }
+    };
+    
+    renderStep();
+    document.body.appendChild(overlay);
+    
+    // Keep screen on during cooking
+    if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').then(lock => {
+            window.wakeLock = lock;
+        }).catch(() => {});
+    }
+    
+    showToast('👨‍🍳 Kokmodus aktivert!', 'success');
+}
+
+// ===== NUTRITION ESTIMATOR =====
+function openNutritionEstimator() {
+    const modal = $('nutritionModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        if (state.currentRecipe) {
+            estimateNutrition(state.currentRecipe);
+        }
+    }
+}
+
+function closeNutritionEstimator() {
+    const modal = $('nutritionModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function estimateNutrition(recipe) {
+    const container = $('nutritionContent');
+    if (!container) return;
+    
+    // Simple estimation based on common ingredients
+    const ingredients = (recipe.ingredients || '').toLowerCase();
+    let calories = 300;
+    let protein = 15;
+    let carbs = 30;
+    let fat = 10;
+    
+    // Rough estimates
+    if (ingredients.includes('kjøtt') || ingredients.includes('biff') || ingredients.includes('kylling')) {
+        protein += 25;
+        calories += 200;
+    }
+    if (ingredients.includes('pasta') || ingredients.includes('ris') || ingredients.includes('poteter')) {
+        carbs += 40;
+        calories += 150;
+    }
+    if (ingredients.includes('ost') || ingredients.includes('fløte') || ingredients.includes('smør')) {
+        fat += 20;
+        calories += 200;
+    }
+    if (ingredients.includes('grønnsaker') || ingredients.includes('salat')) {
+        calories -= 50;
+    }
+    if (ingredients.includes('sukker') || ingredients.includes('sjokolade')) {
+        carbs += 30;
+        calories += 150;
+    }
+    
+    container.innerHTML = `
+        <div class="nutrition-header">
+            <h4>📊 Estimert for "${escapeHtml(recipe.name)}"</h4>
+            <p class="nutrition-disclaimer">* Grove estimater basert på ingredienser</p>
+        </div>
+        <div class="nutrition-grid">
+            <div class="nutrition-item calories">
+                <span class="nutrition-value">${calories}</span>
+                <span class="nutrition-label">Kalorier</span>
+            </div>
+            <div class="nutrition-item protein">
+                <span class="nutrition-value">${protein}g</span>
+                <span class="nutrition-label">Protein</span>
+            </div>
+            <div class="nutrition-item carbs">
+                <span class="nutrition-value">${carbs}g</span>
+                <span class="nutrition-label">Karbohydrater</span>
+            </div>
+            <div class="nutrition-item fat">
+                <span class="nutrition-value">${fat}g</span>
+                <span class="nutrition-label">Fett</span>
+            </div>
+        </div>
+        <div class="nutrition-chart">
+            <div class="nutrition-bar protein-bar" style="width: ${(protein / 50) * 100}%"></div>
+            <div class="nutrition-bar carbs-bar" style="width: ${(carbs / 100) * 100}%"></div>
+            <div class="nutrition-bar fat-bar" style="width: ${(fat / 50) * 100}%"></div>
+        </div>
+    `;
+}
+
+// ===== RECIPE NOTES / TIPS =====
+async function addCookingTip() {
+    if (!state.currentRecipe) return;
+    
+    const tip = prompt('Legg til et koketips eller notat:');
+    if (!tip || !tip.trim()) return;
+    
+    const recipe = state.currentRecipe;
+    recipe.tips = recipe.tips || [];
+    recipe.tips.push({
+        text: tip.trim(),
+        date: new Date().toISOString()
+    });
+    
+    await saveToFirestore('recipes', recipe.id, { tips: recipe.tips });
+    renderRecipeView();
+    showToast('💡 Tips lagt til!', 'success');
+}
+
+// ===== PRINT RECIPE =====
+function printRecipe() {
+    if (!state.currentRecipe) return;
+    
+    const recipe = state.currentRecipe;
+    const category = state.categories.find(c => c.id === recipe.category);
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${escapeHtml(recipe.name)} - Familiens Kokebok</title>
+            <style>
+                body { font-family: Georgia, serif; max-width: 700px; margin: 40px auto; padding: 20px; }
+                h1 { color: #8B4513; border-bottom: 2px solid #D2691E; padding-bottom: 10px; }
+                .meta { color: #666; font-style: italic; margin-bottom: 20px; }
+                h2 { color: #A0522D; margin-top: 30px; }
+                .ingredients { background: #FFF8DC; padding: 15px; border-radius: 8px; }
+                .ingredients pre { margin: 0; white-space: pre-wrap; font-family: inherit; }
+                .instructions { line-height: 1.8; }
+                .instructions pre { white-space: pre-wrap; font-family: inherit; }
+                .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #888; font-size: 12px; }
+                @media print { body { margin: 0; } }
+            </style>
+        </head>
+        <body>
+            <h1>${escapeHtml(recipe.name)}</h1>
+            <div class="meta">
+                ${category ? category.icon + ' ' + category.name : ''} 
+                ${recipe.servings ? ' • 👥 ' + escapeHtml(recipe.servings) : ''}
+                ${recipe.prepTime ? ' • ⏱️ ' + escapeHtml(recipe.prepTime) : ''}
+            </div>
+            
+            ${recipe.ingredients ? `
+                <h2>🥄 Ingredienser</h2>
+                <div class="ingredients"><pre>${escapeHtml(recipe.ingredients)}</pre></div>
+            ` : ''}
+            
+            ${recipe.instructions ? `
+                <h2>👩‍🍳 Fremgangsmåte</h2>
+                <div class="instructions"><pre>${escapeHtml(recipe.instructions)}</pre></div>
+            ` : ''}
+            
+            ${recipe.notes ? `
+                <h2>📝 Notater</h2>
+                <p>${escapeHtml(recipe.notes)}</p>
+            ` : ''}
+            
+            <div class="footer">Skrevet ut fra Familiens Kokebok • ${new Date().toLocaleDateString('nb-NO')}</div>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+}
+
+// ===== DUPLICATE RECIPE =====
+async function duplicateRecipe() {
+    if (!state.currentRecipe) return;
+    
+    const recipe = state.currentRecipe;
+    const newRecipe = {
+        ...recipe,
+        name: recipe.name + ' (kopi)',
+        id: undefined,
+        createdAt: undefined
+    };
+    delete newRecipe.id;
+    
+    const id = await saveToFirestore('recipes', null, newRecipe);
+    state.recipes.push({ id, ...newRecipe, createdAt: { toDate: () => new Date() } });
+    
+    showToast('📋 Oppskrift duplisert!', 'success');
+    renderDashboard();
+}
+
+// ===== SEASONAL SUGGESTIONS =====
+function getSeasonalSuggestion() {
+    const month = new Date().getMonth();
+    let seasonal = [];
+    
+    // Norwegian seasonal foods
+    if (month >= 11 || month <= 1) { // Winter
+        seasonal = ['julekaker', 'ribbe', 'pinnekjøtt', 'lutefisk', 'gløgg'];
+    } else if (month >= 2 && month <= 4) { // Spring
+        seasonal = ['lam', 'asparges', 'ramsløk', 'påskeegg', 'mazarinkake'];
+    } else if (month >= 5 && month <= 7) { // Summer
+        seasonal = ['jordbær', 'grillmat', 'salater', 'is', 'rabarbra'];
+    } else { // Autumn
+        seasonal = ['sopp', 'vilt', 'epler', 'plommer', 'pærer'];
+    }
+    
+    return seasonal;
+}
+
+function showSeasonalTips() {
+    const seasonal = getSeasonalSuggestion();
+    const seasonName = ['vinter', 'vinter', 'vår', 'vår', 'vår', 'sommer', 'sommer', 'sommer', 'høst', 'høst', 'høst', 'vinter'][new Date().getMonth()];
+    
+    showToast(`🍂 ${seasonName.charAt(0).toUpperCase() + seasonName.slice(1)}tips: Prøv ${seasonal[Math.floor(Math.random() * seasonal.length)]}!`, 'info');
+}
+
+// ===== QUICK STATS ANIMATION =====
+function animateStats() {
+    const stats = $$('.stat-value');
+    stats.forEach(stat => {
+        const target = parseInt(stat.textContent) || 0;
+        let current = 0;
+        const increment = Math.ceil(target / 20);
+        const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+                current = target;
+                clearInterval(timer);
+            }
+            stat.textContent = current;
+        }, 50);
+    });
+}
+
+// ===== RECIPE EXPORT TO JSON =====
+function exportRecipeAsJson() {
+    if (!state.currentRecipe) return;
+    
+    const recipe = state.currentRecipe;
+    const json = JSON.stringify(recipe, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${recipe.name.replace(/[^a-z0-9]/gi, '_')}.json`;
+    a.click();
+    
+    URL.revokeObjectURL(url);
+    showToast('📄 Oppskrift eksportert!', 'success');
+}
+
+// ===== VOICE CONTROL (Beta) =====
+function setupVoiceControl() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        return;
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'nb-NO';
+    recognition.continuous = false;
+    
+    recognition.onresult = (event) => {
+        const command = event.results[0][0].transcript.toLowerCase();
+        
+        if (command.includes('neste')) {
+            if (window.cookingModeNext) window.cookingModeNext();
+        } else if (command.includes('forrige')) {
+            if (window.cookingModePrev) window.cookingModePrev();
+        } else if (command.includes('timer') || command.includes('klokke')) {
+            openTimer();
+        } else if (command.includes('stopp') || command.includes('avslutt')) {
+            if (window.exitCookingMode) window.exitCookingMode();
+        }
+        
+        showToast(`🎤 "${command}"`, 'info');
+    };
+    
+    window.startVoiceControl = () => {
+        recognition.start();
+        showToast('🎤 Lytter...', 'info');
+    };
+}
+
+// ===== RECIPE COST ESTIMATOR =====
+function estimateCost() {
+    if (!state.currentRecipe) return;
+    
+    const ingredients = (state.currentRecipe.ingredients || '').toLowerCase();
+    let cost = 50; // Base cost
+    
+    // Norwegian price estimates
+    if (ingredients.includes('biff') || ingredients.includes('laks') || ingredients.includes('reker')) cost += 100;
+    if (ingredients.includes('kylling')) cost += 50;
+    if (ingredients.includes('kjøttdeig')) cost += 40;
+    if (ingredients.includes('ost')) cost += 30;
+    if (ingredients.includes('fløte') || ingredients.includes('smør')) cost += 25;
+    if (ingredients.includes('grønnsaker') || ingredients.includes('salat')) cost += 20;
+    
+    const servings = parseInt(state.currentRecipe.servings) || 4;
+    const perPerson = Math.round(cost / servings);
+    
+    showToast(`💰 Estimert kostnad: ~${cost} kr (${perPerson} kr/pers)`, 'info');
+}
+
+// ===== SHARE TO SOCIAL MEDIA =====
+async function shareToSocial(platform) {
+    if (!state.currentRecipe) return;
+    
+    const recipe = state.currentRecipe;
+    const text = `🍳 ${recipe.name} - Prøv denne oppskriften fra Familiens Kokebok!`;
+    const url = window.location.href;
+    
+    const shareUrls = {
+        facebook: `https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}`,
+        twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
+        pinterest: `https://pinterest.com/pin/create/button/?description=${encodeURIComponent(text)}`,
+        email: `mailto:?subject=${encodeURIComponent(recipe.name)}&body=${encodeURIComponent(text + '\n\nIngredienser:\n' + recipe.ingredients)}`
+    };
+    
+    if (shareUrls[platform]) {
+        window.open(shareUrls[platform], '_blank', 'width=600,height=400');
+    }
+}
+
+// ===== ACHIEVEMENTS SYSTEM =====
+const achievements = {
+    firstRecipe: { name: 'Første oppskrift', icon: '🎉', desc: 'La til din første oppskrift' },
+    fiveRecipes: { name: 'Matentusiast', icon: '👨‍🍳', desc: '5 oppskrifter i samlingen' },
+    tenRecipes: { name: 'Kokebok-mester', icon: '📚', desc: '10 oppskrifter i samlingen' },
+    firstBook: { name: 'Bokskaper', icon: '📖', desc: 'Opprettet din første kokebok' },
+    mealPlanner: { name: 'Planlegger', icon: '📅', desc: 'Planla en hel uke' },
+    shoppingPro: { name: 'Handleproff', icon: '🛒', desc: 'Brukte handlelisten' }
+};
+
+function checkAchievements() {
+    const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    
+    if (state.recipes.length >= 1 && !earned.includes('firstRecipe')) {
+        unlockAchievement('firstRecipe');
+    }
+    if (state.recipes.length >= 5 && !earned.includes('fiveRecipes')) {
+        unlockAchievement('fiveRecipes');
+    }
+    if (state.recipes.length >= 10 && !earned.includes('tenRecipes')) {
+        unlockAchievement('tenRecipes');
+    }
+    if (state.books.length >= 1 && !earned.includes('firstBook')) {
+        unlockAchievement('firstBook');
+    }
+}
+
+function unlockAchievement(id) {
+    const achievement = achievements[id];
+    if (!achievement) return;
+    
+    const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    earned.push(id);
+    localStorage.setItem('kokebok_achievements', JSON.stringify(earned));
+    
+    // Show achievement popup
+    const popup = document.createElement('div');
+    popup.className = 'achievement-popup';
+    popup.innerHTML = `
+        <div class="achievement-icon">${achievement.icon}</div>
+        <div class="achievement-text">
+            <strong>🏆 Prestasjon låst opp!</strong>
+            <span>${achievement.name}</span>
+        </div>
+    `;
+    document.body.appendChild(popup);
+    
+    triggerConfetti();
+    
+    setTimeout(() => popup.remove(), 4000);
+}
+
+function showAchievements() {
+    const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    
+    let html = '<div class="achievements-grid">';
+    for (const [id, ach] of Object.entries(achievements)) {
+        const unlocked = earned.includes(id);
+        html += `
+            <div class="achievement-card ${unlocked ? 'unlocked' : 'locked'}">
+                <span class="achievement-icon">${unlocked ? ach.icon : '🔒'}</span>
+                <span class="achievement-name">${ach.name}</span>
+                <span class="achievement-desc">${ach.desc}</span>
+            </div>
+        `;
+    }
+    html += '</div>';
+    
+    showModal('🏆 Prestasjoner', html, []);
+}
+
+// ===== RECIPE OF THE DAY =====
+function getRecipeOfTheDay() {
+    if (state.recipes.length === 0) return null;
+    
+    // Use date as seed for consistent daily recipe
+    const today = new Date();
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    const index = seed % state.recipes.length;
+    
+    return state.recipes[index];
+}
+
+// ===== DARK MODE SCHEDULE =====
+function setupAutoDarkMode() {
+    const hour = new Date().getHours();
+    const shouldBeDark = hour >= 20 || hour < 7;
+    
+    if (state.settings.autoDarkMode && shouldBeDark !== state.settings.darkMode) {
+        state.settings.darkMode = shouldBeDark;
+        document.body.classList.toggle('dark-mode', shouldBeDark);
+    }
+}
+
+// ===== KEYBOARD SHORTCUTS =====
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Ctrl/Cmd + shortcuts
+        if (e.ctrlKey || e.metaKey) {
+            switch (e.key) {
+                case 'n':
+                    e.preventDefault();
+                    openRecipeEditor();
+                    break;
+                case 'f':
+                    e.preventDefault();
+                    $('searchInput')?.focus();
+                    break;
+                case 'p':
+                    e.preventDefault();
+                    if (state.currentRecipe) printRecipe();
+                    break;
+            }
+        }
+        
+        // Escape to close modals
+        if (e.key === 'Escape') {
+            closeRecipeSearch();
+            closeMealPlanner();
+            closeShoppingList();
+            closeTimer();
+            closeNutritionEstimator();
+            if (window.exitCookingMode) window.exitCookingMode();
+        }
+    });
+}
+
+// Initialize new features
+setupKeyboardShortcuts();
+setupVoiceControl();
+
+// Add to window for onclick handlers
+window.getRandomRecipe = getRandomRecipe;
+window.rateRecipe = rateRecipe;
+window.startCookingMode = startCookingMode;
+window.openNutritionEstimator = openNutritionEstimator;
+window.closeNutritionEstimator = closeNutritionEstimator;
+window.addCookingTip = addCookingTip;
+window.printRecipe = printRecipe;
+window.duplicateRecipe = duplicateRecipe;
+window.showSeasonalTips = showSeasonalTips;
+window.exportRecipeAsJson = exportRecipeAsJson;
+window.estimateCost = estimateCost;
+window.shareToSocial = shareToSocial;
+window.showAchievements = showAchievements;
+window.checkAchievements = checkAchievements;

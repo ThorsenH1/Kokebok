@@ -3651,3 +3651,597 @@ body.font-large { font-size: 18px; }
 .stat-value.counting {
     animation: pulse 0.3s ease;
 }
+
+/* ===== V3.1 PREMIUM FEATURES STYLES ===== */
+
+/* Recipe of the Day Card */
+.recipe-of-day-card {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    margin: 0 16px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--shadow);
+    animation: slideInUp 0.5s ease;
+}
+
+.rotd-badge {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.rotd-content {
+    flex: 1;
+    padding: 0 16px;
+}
+
+.rotd-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text);
+}
+
+.rotd-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.rotd-btn:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow);
+}
+
+/* Achievements Banner */
+.achievements-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 14px 20px;
+    margin: 16px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.achievements-banner:hover {
+    transform: translateX(5px);
+    box-shadow: var(--shadow-lg);
+}
+
+.achievements-icon {
+    font-size: 1.5rem;
+}
+
+.achievements-text {
+    flex: 1;
+    font-weight: 600;
+}
+
+.achievements-arrow {
+    font-size: 1.2rem;
+}
+
+/* Premium Recipe Actions */
+.premium-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding: 16px;
+    margin-top: 20px;
+    border-top: 2px solid var(--border-light);
+}
+
+.premium-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 10px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    transition: all 0.3s;
+}
+
+.premium-btn span:first-child {
+    font-size: 1.4rem;
+}
+
+.premium-btn:hover {
+    border-color: var(--primary);
+    background: var(--accent-light);
+    transform: translateY(-2px);
+}
+
+.premium-btn.cook-mode {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    border: none;
+    grid-column: span 3;
+}
+
+.premium-btn.cook-mode:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+}
+
+/* Social Share Buttons */
+.social-share {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    justify-content: center;
+}
+
+.share-label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.social-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.social-btn:hover {
+    transform: scale(1.15);
+}
+
+.social-btn.facebook { background: #1877f2; }
+.social-btn.twitter { background: #000; }
+.social-btn.pinterest { background: #e60023; }
+.social-btn.email { background: #666; }
+
+/* Cooking Mode Overlay */
+.cooking-mode-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.cooking-mode-content {
+    width: 100%;
+    max-width: 600px;
+    padding: 40px 30px;
+    text-align: center;
+}
+
+.cooking-mode-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 30px;
+}
+
+.cooking-mode-header h2 {
+    color: white;
+    font-size: 1.3rem;
+    margin: 0;
+}
+
+.cooking-mode-close {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3);
+    background: transparent;
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cooking-mode-close:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: white;
+}
+
+.cooking-mode-step-indicator {
+    color: #38ef7d;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.cooking-mode-progress {
+    height: 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+    margin-bottom: 40px;
+    overflow: hidden;
+}
+
+.cooking-mode-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #11998e, #38ef7d);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.cooking-mode-instruction {
+    color: white;
+    font-size: 1.6rem;
+    line-height: 1.6;
+    font-weight: 500;
+    padding: 30px;
+    background: rgba(255,255,255,0.05);
+    border-radius: var(--radius-lg);
+    margin-bottom: 40px;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cooking-mode-nav {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.cooking-mode-btn {
+    padding: 16px 32px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: var(--radius);
+    background: transparent;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.cooking-mode-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.1);
+    border-color: white;
+}
+
+.cooking-mode-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.cooking-mode-btn.done {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    border: none;
+}
+
+.cooking-mode-timer-btn {
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    border: none;
+    border-radius: var(--radius);
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.cooking-mode-timer-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Nutrition Modal Content */
+.nutrition-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.nutrition-header h4 {
+    font-size: 1.1rem;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+
+.nutrition-disclaimer {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.nutrition-item {
+    text-align: center;
+    padding: 16px;
+    border-radius: var(--radius);
+    background: var(--bg);
+}
+
+.nutrition-item.calories { border-left: 4px solid #ff6b6b; }
+.nutrition-item.protein { border-left: 4px solid #4ecdc4; }
+.nutrition-item.carbs { border-left: 4px solid #ffd93d; }
+.nutrition-item.fat { border-left: 4px solid #6c5ce7; }
+
+.nutrition-value {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.nutrition-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.nutrition-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.nutrition-bar {
+    height: 8px;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.nutrition-bar.protein-bar { background: #4ecdc4; }
+.nutrition-bar.carbs-bar { background: #ffd93d; }
+.nutrition-bar.fat-bar { background: #6c5ce7; }
+
+/* Achievement Popup */
+.achievement-popup {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    padding: 20px 30px;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: achievementPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes achievementPop {
+    0% { transform: translateX(-50%) scale(0) rotate(-10deg); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1) rotate(0); opacity: 1; }
+}
+
+.achievement-icon {
+    font-size: 3rem;
+    animation: heartBeat 1s ease infinite;
+}
+
+.achievement-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.achievement-text strong {
+    color: #8B4513;
+    font-size: 0.9rem;
+}
+
+.achievement-text span {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* Achievements Grid */
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.achievement-card {
+    text-align: center;
+    padding: 20px 16px;
+    border-radius: var(--radius);
+    transition: all 0.3s;
+}
+
+.achievement-card.unlocked {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+}
+
+.achievement-card.locked {
+    background: var(--bg);
+    opacity: 0.6;
+}
+
+.achievement-card .achievement-icon {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.achievement-card .achievement-name {
+    display: block;
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.achievement-card .achievement-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Voice Control Button */
+.voice-control-btn {
+    position: fixed;
+    bottom: calc(var(--nav-height) + 80px + var(--safe-bottom));
+    left: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s;
+    z-index: 1000;
+}
+
+.voice-control-btn:hover {
+    transform: scale(1.1);
+}
+
+.voice-control-btn.listening {
+    animation: pulse 1s infinite;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+/* Seasonal tip badge */
+.seasonal-tip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: linear-gradient(135deg, #a8e063 0%, #56ab2f 100%);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 10px 16px;
+    cursor: pointer;
+}
+
+/* Rating stars */
+.rating-stars {
+    display: flex;
+    gap: 4px;
+    margin: 12px 0;
+}
+
+.rating-star {
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #ddd;
+}
+
+.rating-star.active,
+.rating-star:hover {
+    color: #ffd700;
+    transform: scale(1.2);
+}
+
+/* Keyboard shortcut hints */
+.kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Loading skeleton animation */
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius);
+}
+
+/* Mobile optimizations for premium features */
+@media (max-width: 480px) {
+    .premium-actions {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .premium-btn.cook-mode {
+        grid-column: span 2;
+    }
+    
+    .cooking-mode-instruction {
+        font-size: 1.3rem;
+        padding: 20px;
+    }
+    
+    .cooking-mode-nav {
+        flex-direction: column;
+    }
+    
+    .cooking-mode-btn {
+        width: 100%;
+    }
+    
+    .achievements-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .recipe-of-day-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 12px;
+    }
+}
+
+/* Dark mode for new features */
+.dark-mode .cooking-mode-overlay {
+    background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+}
+
+.dark-mode .premium-btn {
+    background: var(--bg-card);
+}
+
+.dark-mode .achievement-popup {
+    background: linear-gradient(135deg, #434343 0%, #000000 100%);
+    color: white;
+}
+
+.dark-mode .achievement-popup .achievement-text strong {
+    color: #ffd700;
+}
+
+.dark-mode .nutrition-item {
+    background: var(--bg-card);
+}

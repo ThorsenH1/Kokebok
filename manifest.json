@@ -1,7 +1,8 @@
 {
     "name": "Familiens Kokebok",
     "short_name": "Kokebok",
-    "description": "Digitaliser gamle kokebøker og oppskrifter fra bestemødre og oldemødre",
+    "description": "Digitaliser og bevar familiens oppskrifter. Med måltidsplanlegger, handleliste, kokemodus og mer!",
+    "version": "3.1.0",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#FDF5E6",
@@ -40,10 +41,17 @@
             "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
         },
         {
-            "name": "Ta bilde",
-            "short_name": "Kamera",
-            "description": "Ta bilde av en oppskrift",
-            "url": "./index.html?action=camera",
+            "name": "Tilfeldig oppskrift",
+            "short_name": "Tilfeldig",
+            "description": "Få en tilfeldig oppskrift",
+            "url": "./index.html?action=random",
+            "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "Måltidsplan",
+            "short_name": "Plan",
+            "description": "Planlegg ukens måltider",
+            "url": "./index.html?action=meal-plan",
             "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
         }
     ]

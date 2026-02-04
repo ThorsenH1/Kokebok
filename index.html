@@ -105,6 +105,15 @@
                     <div class="welcome-icon">📖</div>
                 </div>
 
+                <!-- Recipe of the Day -->
+                <div id="recipeOfTheDay" class="recipe-of-day-card" style="display: none;">
+                    <div class="rotd-badge">⭐ Dagens oppskrift</div>
+                    <div class="rotd-content">
+                        <span class="rotd-name" id="rotdName">-</span>
+                        <button class="rotd-btn" id="viewRotdBtn">Se oppskrift →</button>
+                    </div>
+                </div>
+
                 <!-- Quick Actions - Primary Row -->
                 <div class="quick-actions">
                     <button id="addRecipeBtn" class="quick-action-btn primary">
@@ -115,9 +124,9 @@
                         <span class="action-icon">📚</span>
                         <span class="action-text">Ny Bok</span>
                     </button>
-                    <button id="scanBtn" class="quick-action-btn accent">
-                        <span class="action-icon">📷</span>
-                        <span class="action-text">Ta Bilde</span>
+                    <button id="randomRecipeBtn" class="quick-action-btn accent" onclick="getRandomRecipe()">
+                        <span class="action-icon">🎲</span>
+                        <span class="action-text">Tilfeldig</span>
                     </button>
                 </div>
 
@@ -154,7 +163,7 @@
                         <span class="stat-value">0</span>
                         <span class="stat-label">Kokebøker</span>
                     </div>
-                    <div class="stat-card" id="statFavorites" onclick="navigateTo('favoritesView')">
+                    <div class="stat-card" id="statFavorites">
                         <span class="stat-icon">⭐</span>
                         <span class="stat-value">0</span>
                         <span class="stat-label">Favoritter</span>
@@ -164,6 +173,13 @@
                         <span class="stat-value">0</span>
                         <span class="stat-label">Planlagt</span>
                     </div>
+                </div>
+
+                <!-- Achievements Banner -->
+                <div class="achievements-banner" onclick="showAchievements()">
+                    <span class="achievements-icon">🏆</span>
+                    <span class="achievements-text">Se dine prestasjoner</span>
+                    <span class="achievements-arrow">→</span>
                 </div>
 
                 <!-- Categories Section -->
@@ -227,6 +243,35 @@
                 </div>
                 <div id="recipeContent" class="recipe-content">
                     <!-- Recipe content rendered here -->
+                </div>
+                <!-- Premium Recipe Actions -->
+                <div class="premium-actions">
+                    <button class="premium-btn cook-mode" onclick="startCookingMode()">
+                        <span>👨‍🍳</span> Start kokmodus
+                    </button>
+                    <button class="premium-btn" onclick="openNutritionEstimator()">
+                        <span>📊</span> Næringsinfo
+                    </button>
+                    <button class="premium-btn" onclick="estimateCost()">
+                        <span>💰</span> Prisestimat
+                    </button>
+                    <button class="premium-btn" onclick="printRecipe()">
+                        <span>🖨️</span> Skriv ut
+                    </button>
+                    <button class="premium-btn" onclick="duplicateRecipe()">
+                        <span>📋</span> Dupliser
+                    </button>
+                    <button class="premium-btn" onclick="addCookingTip()">
+                        <span>💡</span> Legg til tips
+                    </button>
+                </div>
+                <!-- Social Share -->
+                <div class="social-share">
+                    <span class="share-label">Del på:</span>
+                    <button class="social-btn facebook" onclick="shareToSocial('facebook')">f</button>
+                    <button class="social-btn twitter" onclick="shareToSocial('twitter')">𝕏</button>
+                    <button class="social-btn pinterest" onclick="shareToSocial('pinterest')">P</button>
+                    <button class="social-btn email" onclick="shareToSocial('email')">✉️</button>
                 </div>
             </section>
 
@@ -806,6 +851,22 @@
         </div>
     </div>
 
+    <!-- Nutrition Estimator Modal -->
+    <div id="nutritionModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay" onclick="closeNutritionEstimator()"></div>
+        <div class="feature-modal-content compact">
+            <div class="feature-modal-header gradient-header-green">
+                <h3>📊 Næringsinnhold</h3>
+                <button class="modal-close-btn" onclick="closeNutritionEstimator()">✕</button>
+            </div>
+            <div class="feature-modal-body">
+                <div id="nutritionContent">
+                    <!-- Nutrition data rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Floating Action Button for Timer -->
     <div id="floatingTimer" class="floating-timer hidden">
         <div class="floating-timer-display">
@@ -821,7 +882,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-config.js?v=3.0"></script>
-    <script src="app.js?v=3.0"></script>
+    <script src="firebase-config.js?v=3.1"></script>
+    <script src="app.js?v=3.1"></script>
 </body>
 </html>
