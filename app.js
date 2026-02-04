@@ -1,20 +1,25 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v2.0
+// FAMILIENS KOKEBOK APP v3.0
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
-// Med AI-drevet OCR for tekstgjenkjenning
+// 100% privat - ingen AI lærer av dine oppskrifter
 // ==========================================
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '3.0.0';
 
 // ===== Firebase Initialization =====
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// ===== OCR State =====
-let ocrWorker = null;
-let currentScanTarget = null; // 'ingredients' | 'instructions' | 'full'
+// ===== Timer State =====
+let timerInterval = null;
+let timerSeconds = 0;
+let timerRunning = false;
+let timerLabel = '';
+
+// ===== Language State =====
+let currentLanguage = localStorage.getItem('kokebok_language') || 'no';
 
 // ===== Default Categories =====
 const DEFAULT_CATEGORIES = [
@@ -56,7 +61,12 @@ const state = {
     sortOrder: 'newest',
     // Digital book reader state
     currentBookPages: [],
-    currentPageIndex: 0
+    currentPageIndex: 0,
+    // New v3.0 state
+    favorites: [],
+    mealPlan: {},
+    shoppingList: [],
+    currentWeekOffset: 0
 };
 
 // ===== DOM Helpers =====
@@ -290,6 +300,7 @@ async function initApp() {
     
     try {
         await loadAllData();
+        await loadExtraSettings();
         setupEventListeners();
         renderDashboard();
         applySettings();
@@ -452,14 +463,25 @@ function setupEventListeners() {
         });
     });
     
-    // Quick actions - bruk showAddRecipeChoice for bedre brukeropplevelse
-    on('addRecipeBtn', 'click', () => showAddRecipeChoice());
+    // Quick actions - åpne oppskriftseditor direkte
+    on('addRecipeBtn', 'click', () => openRecipeEditor());
     on('addBookBtn', 'click', () => openBookEditor());
-    on('scanBtn', 'click', () => {
-        currentScanTarget = 'full';
-        openAIScanner();
-    });
     on('navAddBtn', 'click', () => showAddMenu());
+    
+    // New v3.0 Feature Buttons
+    on('searchRecipesBtn', 'click', openRecipeSearch);
+    on('mealPlannerBtn', 'click', openMealPlanner);
+    on('shoppingListBtn', 'click', openShoppingList);
+    on('timerBtn', 'click', openTimer);
+    on('floatingTimerBtn', 'click', openTimer);
+    
+    // Side Menu Feature Items
+    on('menuFavorites', 'click', () => { navigateTo('recipeListView'); filterFavorites(); toggleSideMenu(false); });
+    on('menuSearch', 'click', () => { openRecipeSearch(); toggleSideMenu(false); });
+    on('menuMealPlanner', 'click', () => { openMealPlanner(); toggleSideMenu(false); });
+    on('menuShoppingList', 'click', () => { openShoppingList(); toggleSideMenu(false); });
+    on('menuTimer', 'click', () => { openTimer(); toggleSideMenu(false); });
+    on('menuLanguage', 'click', () => { openLanguageSelector(); toggleSideMenu(false); });
     
     // Dashboard buttons
     on('manageCategoriesBtn', 'click', () => navigateTo('categoriesView'));
@@ -1910,354 +1932,848 @@ function closeModal() {
 }
 
 function showAddMenu() {
-    // Vis det nye valgmenyen i stedet for modal
-    showAddRecipeChoice();
+    // Vis modal for å velge oppskrift eller bok
+    openRecipeEditor();
 }
 
-// ===== ADD RECIPE CHOICE MODAL =====
-function showAddRecipeChoice() {
-    const modal = $('addRecipeChoiceModal');
+// ===== V3.0 NEW FEATURES =====
+
+// ===== RECIPE SEARCH (TheMealDB API) =====
+async function openRecipeSearch() {
+    const modal = $('recipeSearchModal');
     if (modal) {
         modal.classList.remove('hidden');
+        const searchInput = $('apiSearchInput');
+        if (searchInput) searchInput.focus();
         
-        // Setup event handlers
-        const choiceManual = $('choiceManual');
-        const choiceScan = $('choiceScan');
-        const closeBtn = $('closeChoiceModal');
-        const overlay = modal.querySelector('.choice-modal-overlay');
-        
-        const closeChoice = () => modal.classList.add('hidden');
-        
-        if (choiceManual) {
-            choiceManual.onclick = () => {
-                closeChoice();
-                openRecipeEditor();
-            };
-        }
-        
-        if (choiceScan) {
-            choiceScan.onclick = () => {
-                closeChoice();
-                currentScanTarget = 'full';
-                openAIScanner();
-            };
-        }
-        
-        if (closeBtn) closeBtn.onclick = closeChoice;
-        if (overlay) overlay.onclick = closeChoice;
+        // Setup events
+        setupRecipeSearchEvents();
     }
 }
 
-// ===== AI SCANNER FUNCTIONS =====
-function openAIScanner() {
-    const modal = $('aiScannerModal');
-    if (!modal) return;
-    
-    modal.classList.remove('hidden');
-    showScanStep(1);
-    
-    // Reset state
-    const preview = $('scanPreview');
-    const previewImg = $('scanPreviewImage');
-    if (preview) preview.classList.add('hidden');
-    if (previewImg) previewImg.src = '';
-    
-    setupScannerEvents();
-}
-
-function closeAIScanner() {
-    const modal = $('aiScannerModal');
+function closeRecipeSearch() {
+    const modal = $('recipeSearchModal');
     if (modal) modal.classList.add('hidden');
-    currentScanTarget = null;
 }
 
-function showScanStep(step) {
-    ['scanStep1', 'scanStep2', 'scanStep3'].forEach((id, i) => {
-        const el = $(id);
-        if (el) {
-            el.classList.toggle('active', i + 1 === step);
+function setupRecipeSearchEvents() {
+    const closeBtn = $('closeRecipeSearchBtn');
+    const overlay = document.querySelector('#recipeSearchModal .feature-modal-overlay');
+    const searchBtn = $('apiSearchBtn');
+    const searchInput = $('apiSearchInput');
+    const categoryFilter = $('apiCategoryFilter');
+    
+    if (closeBtn) closeBtn.onclick = closeRecipeSearch;
+    if (overlay) overlay.onclick = closeRecipeSearch;
+    
+    if (searchBtn) searchBtn.onclick = performRecipeSearch;
+    if (searchInput) {
+        searchInput.onkeypress = (e) => {
+            if (e.key === 'Enter') performRecipeSearch();
+        };
+    }
+    if (categoryFilter) categoryFilter.onchange = performCategorySearch;
+}
+
+async function performRecipeSearch() {
+    const searchInput = $('apiSearchInput');
+    const resultsContainer = $('apiSearchResults');
+    const query = searchInput?.value?.trim();
+    
+    if (!query) {
+        showToast('Skriv inn et søkeord', 'warning');
+        return;
+    }
+    
+    // Show loading
+    resultsContainer.innerHTML = `
+        <div class="search-loading">
+            <div class="spinner"></div>
+            <p>Søker etter oppskrifter...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        if (data.meals && data.meals.length > 0) {
+            renderSearchResults(data.meals);
+        } else {
+            resultsContainer.innerHTML = `
+                <div class="search-placeholder">
+                    <span>🤷</span>
+                    <p>Ingen oppskrifter funnet for "${escapeHtml(query)}"</p>
+                    <p>Prøv et annet søkeord</p>
+                </div>
+            `;
         }
+    } catch (error) {
+        console.error('Search error:', error);
+        resultsContainer.innerHTML = `
+            <div class="search-placeholder">
+                <span>❌</span>
+                <p>Kunne ikke søke. Sjekk internettforbindelsen.</p>
+            </div>
+        `;
+    }
+}
+
+async function performCategorySearch() {
+    const categoryFilter = $('apiCategoryFilter');
+    const resultsContainer = $('apiSearchResults');
+    const category = categoryFilter?.value;
+    
+    if (!category) return;
+    
+    // Show loading
+    resultsContainer.innerHTML = `
+        <div class="search-loading">
+            <div class="spinner"></div>
+            <p>Henter ${category}-oppskrifter...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(category)}`);
+        const data = await response.json();
+        
+        if (data.meals && data.meals.length > 0) {
+            // Get full details for first 10 meals
+            const detailedMeals = [];
+            for (const meal of data.meals.slice(0, 10)) {
+                const detailRes = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`);
+                const detailData = await detailRes.json();
+                if (detailData.meals) detailedMeals.push(detailData.meals[0]);
+            }
+            renderSearchResults(detailedMeals);
+        } else {
+            resultsContainer.innerHTML = `
+                <div class="search-placeholder">
+                    <span>🤷</span>
+                    <p>Ingen oppskrifter i denne kategorien</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Category search error:', error);
+        resultsContainer.innerHTML = `
+            <div class="search-placeholder">
+                <span>❌</span>
+                <p>Kunne ikke hente oppskrifter</p>
+            </div>
+        `;
+    }
+}
+
+function renderSearchResults(meals) {
+    const resultsContainer = $('apiSearchResults');
+    
+    resultsContainer.innerHTML = meals.map(meal => `
+        <div class="search-result-card" data-meal-id="${meal.idMeal}">
+            <img src="${meal.strMealThumb}/preview" class="search-result-image" alt="${escapeHtml(meal.strMeal)}">
+            <div class="search-result-info">
+                <h4>${escapeHtml(meal.strMeal)}</h4>
+                <p>${meal.strArea || 'Internasjonal'} • ${meal.strCategory || ''}</p>
+                <span class="search-result-tag">🌍 TheMealDB</span>
+            </div>
+        </div>
+    `).join('');
+    
+    // Add click handlers
+    resultsContainer.querySelectorAll('.search-result-card').forEach(card => {
+        card.onclick = () => showQuickRecipe(card.dataset.mealId);
     });
 }
 
-function setupScannerEvents() {
-    const closeBtn = $('closeScannerBtn');
-    const overlay = document.querySelector('.ai-scanner-overlay');
-    const uploadBtn = $('scanUploadBtn');
-    const cameraBtn = $('scanCameraBtn');
-    const fileInput = $('scanFileInput');
-    const cameraInput = $('scanCameraInput');
-    const dropZone = $('scanDropZone');
-    const removeBtn = $('removeScanImage');
-    const scanAgainBtn = $('scanAgainBtn');
-    const useTextBtn = $('useScannedTextBtn');
-    
-    // Close handlers
-    if (closeBtn) closeBtn.onclick = closeAIScanner;
-    if (overlay) overlay.onclick = closeAIScanner;
-    
-    // Upload handlers
-    if (uploadBtn) uploadBtn.onclick = (e) => {
-        e.stopPropagation();
-        fileInput?.click();
-    };
-    if (cameraBtn) cameraBtn.onclick = (e) => {
-        e.stopPropagation();
-        cameraInput?.click();
-    };
-    
-    // File input handlers
-    if (fileInput) fileInput.onchange = handleScanFileSelect;
-    if (cameraInput) cameraInput.onchange = handleScanFileSelect;
-    
-    // Drag and drop
-    if (dropZone) {
-        dropZone.onclick = () => fileInput?.click();
-        
-        dropZone.ondragover = (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        };
-        
-        dropZone.ondragleave = () => {
-            dropZone.classList.remove('drag-over');
-        };
-        
-        dropZone.ondrop = (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleScanFile(files[0]);
-            }
-        };
-    }
-    
-    // Remove image
-    if (removeBtn) removeBtn.onclick = () => {
-        const preview = $('scanPreview');
-        const previewImg = $('scanPreviewImage');
-        if (preview) preview.classList.add('hidden');
-        if (previewImg) previewImg.src = '';
-    };
-    
-    // Scan again
-    if (scanAgainBtn) scanAgainBtn.onclick = () => {
-        showScanStep(1);
-        const preview = $('scanPreview');
-        if (preview) preview.classList.add('hidden');
-    };
-    
-    // Use scanned text
-    if (useTextBtn) useTextBtn.onclick = useScannedText;
-}
-
-function handleScanFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) {
-        handleScanFile(file);
-    }
-}
-
-async function handleScanFile(file) {
-    if (!file.type.startsWith('image/')) {
-        showToast('Vennligst velg et bilde', 'error');
-        return;
-    }
-    
+async function showQuickRecipe(mealId) {
     try {
-        // Show preview
-        const preview = $('scanPreview');
-        const previewImg = $('scanPreviewImage');
+        const response = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealId}`);
+        const data = await response.json();
         
-        const base64 = await fileToBase64(file);
-        if (previewImg) previewImg.src = base64;
-        if (preview) preview.classList.remove('hidden');
-        
-        // Wait a bit then start OCR
-        setTimeout(() => startOCR(base64), 500);
-        
-    } catch (error) {
-        console.error('Error handling file:', error);
-        showToast('Kunne ikke lese bildet', 'error');
-    }
-}
-
-async function startOCR(imageData) {
-    showScanStep(2);
-    
-    const statusText = $('scanStatusText');
-    const progressFill = $('scanProgressFill');
-    const progressText = $('scanProgressText');
-    
-    const updateProgress = (status, progress) => {
-        if (statusText) statusText.textContent = status;
-        if (progressFill) progressFill.style.width = `${progress}%`;
-        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
-    };
-    
-    updateProgress('Forbereder...', 5);
-    
-    try {
-        // Use Tesseract.js for OCR
-        if (typeof Tesseract === 'undefined') {
-            throw new Error('Tesseract ikke lastet');
-        }
-        
-        updateProgress('Laster språkdata (norsk)...', 15);
-        
-        const result = await Tesseract.recognize(
-            imageData,
-            'nor+eng', // Norwegian + English
-            {
-                logger: (m) => {
-                    if (m.status === 'recognizing text') {
-                        const progress = 15 + (m.progress * 80);
-                        updateProgress('Leser tekst...', progress);
-                    }
+        if (data.meals && data.meals[0]) {
+            const meal = data.meals[0];
+            
+            // Extract ingredients
+            const ingredients = [];
+            for (let i = 1; i <= 20; i++) {
+                const ingredient = meal[`strIngredient${i}`];
+                const measure = meal[`strMeasure${i}`];
+                if (ingredient && ingredient.trim()) {
+                    ingredients.push(`${measure?.trim() || ''} ${ingredient.trim()}`.trim());
                 }
             }
-        );
-        
-        updateProgress('Ferdig!', 100);
-        
-        // Show results
-        setTimeout(() => {
-            showScanStep(3);
-            const textArea = $('scannedText');
-            if (textArea) {
-                textArea.value = result.data.text || '';
+            
+            // Show quick recipe modal
+            const modal = $('quickRecipeModal');
+            const content = $('quickRecipeContent');
+            
+            if (modal && content) {
+                content.innerHTML = `
+                    <img src="${meal.strMealThumb}" class="quick-recipe-image" alt="${escapeHtml(meal.strMeal)}">
+                    <h3 style="font-size: 1.3rem; margin-bottom: 12px;">${escapeHtml(meal.strMeal)}</h3>
+                    <div class="quick-recipe-meta">
+                        <span>🌍 ${meal.strArea || 'Internasjonal'}</span>
+                        <span>📂 ${meal.strCategory || ''}</span>
+                        ${meal.strTags ? `<span>🏷️ ${meal.strTags}</span>` : ''}
+                    </div>
+                    
+                    <div class="quick-recipe-section">
+                        <h4>🥄 Ingredienser (${ingredients.length})</h4>
+                        <ul>
+                            ${ingredients.map(ing => `<li>${escapeHtml(ing)}</li>`).join('')}
+                        </ul>
+                    </div>
+                    
+                    <div class="quick-recipe-section">
+                        <h4>👩‍🍳 Fremgangsmåte</h4>
+                        <p style="white-space: pre-line; line-height: 1.7;">${escapeHtml(meal.strInstructions)}</p>
+                    </div>
+                    
+                    ${meal.strYoutube ? `
+                        <div class="quick-recipe-section">
+                            <h4>📺 Video</h4>
+                            <a href="${meal.strYoutube}" target="_blank" class="action-btn secondary" style="margin-top: 8px;">
+                                Se på YouTube →
+                            </a>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="quick-recipe-actions">
+                        <button class="action-btn primary" onclick="saveExternalRecipe('${mealId}')">
+                            💾 Lagre i min kokebok
+                        </button>
+                        <button class="action-btn secondary" onclick="addToMealPlanFromSearch('${escapeHtml(meal.strMeal).replace(/'/g, "\\'")}')">
+                            📅 Legg til i ukemeny
+                        </button>
+                    </div>
+                `;
+                
+                modal.classList.remove('hidden');
+                
+                // Setup close
+                const closeBtn = $('closeQuickRecipeBtn');
+                const overlay = modal.querySelector('.feature-modal-overlay');
+                const closeQuickRecipe = () => modal.classList.add('hidden');
+                if (closeBtn) closeBtn.onclick = closeQuickRecipe;
+                if (overlay) overlay.onclick = closeQuickRecipe;
             }
-            
-            // Celebration effect
-            triggerConfetti();
-            
-        }, 300);
-        
+        }
     } catch (error) {
-        console.error('OCR Error:', error);
-        showToast('Kunne ikke lese teksten. Prøv med et tydeligere bilde.', 'error');
-        showScanStep(1);
+        console.error('Error loading recipe:', error);
+        showToast('Kunne ikke laste oppskriften', 'error');
     }
 }
 
-function useScannedText() {
-    const textArea = $('scannedText');
-    const scannedText = textArea?.value || '';
+async function saveExternalRecipe(mealId) {
+    try {
+        const response = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealId}`);
+        const data = await response.json();
+        
+        if (data.meals && data.meals[0]) {
+            const meal = data.meals[0];
+            
+            // Extract ingredients
+            const ingredients = [];
+            for (let i = 1; i <= 20; i++) {
+                const ingredient = meal[`strIngredient${i}`];
+                const measure = meal[`strMeasure${i}`];
+                if (ingredient && ingredient.trim()) {
+                    ingredients.push(`${measure?.trim() || ''} ${ingredient.trim()}`.trim());
+                }
+            }
+            
+            // Create recipe object
+            const recipe = {
+                name: meal.strMeal,
+                category: 'annet',
+                source: 'TheMealDB',
+                ingredients: ingredients.join('\n'),
+                instructions: meal.strInstructions,
+                tags: meal.strTags ? meal.strTags.split(',').map(t => t.trim()) : [],
+                images: [meal.strMealThumb]
+            };
+            
+            const id = await saveToFirestore('recipes', null, recipe);
+            state.recipes.push({ id, ...recipe, createdAt: { toDate: () => new Date() } });
+            
+            showToast('Oppskrift lagret i din kokebok! 🎉', 'success');
+            triggerConfetti();
+            
+            // Close modals
+            $('quickRecipeModal')?.classList.add('hidden');
+            $('recipeSearchModal')?.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Save error:', error);
+        showToast('Kunne ikke lagre oppskriften', 'error');
+    }
+}
+
+// ===== MEAL PLANNER =====
+function openMealPlanner() {
+    const modal = $('mealPlannerModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        renderMealPlannerWeek();
+        setupMealPlannerEvents();
+    }
+}
+
+function closeMealPlanner() {
+    const modal = $('mealPlannerModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function setupMealPlannerEvents() {
+    const closeBtn = $('closeMealPlannerBtn');
+    const overlay = document.querySelector('#mealPlannerModal .feature-modal-overlay');
+    const prevWeekBtn = $('prevWeekBtn');
+    const nextWeekBtn = $('nextWeekBtn');
+    const generateListBtn = $('generateShoppingListBtn');
+    const clearPlanBtn = $('clearMealPlanBtn');
     
-    if (!scannedText.trim()) {
-        showToast('Ingen tekst å bruke', 'warning');
+    if (closeBtn) closeBtn.onclick = closeMealPlanner;
+    if (overlay) overlay.onclick = closeMealPlanner;
+    if (prevWeekBtn) prevWeekBtn.onclick = () => { state.currentWeekOffset--; renderMealPlannerWeek(); };
+    if (nextWeekBtn) nextWeekBtn.onclick = () => { state.currentWeekOffset++; renderMealPlannerWeek(); };
+    if (generateListBtn) generateListBtn.onclick = generateShoppingListFromPlan;
+    if (clearPlanBtn) clearPlanBtn.onclick = clearCurrentWeekPlan;
+}
+
+function renderMealPlannerWeek() {
+    const grid = $('mealPlannerGrid');
+    const weekLabel = $('currentWeekLabel');
+    if (!grid) return;
+    
+    const days = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1 + (state.currentWeekOffset * 7));
+    
+    if (weekLabel) {
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        weekLabel.textContent = `${startOfWeek.getDate()}.${startOfWeek.getMonth() + 1} - ${endOfWeek.getDate()}.${endOfWeek.getMonth() + 1}`;
+    }
+    
+    grid.innerHTML = days.map((day, i) => {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
+        const dateKey = date.toISOString().split('T')[0];
+        const meal = state.mealPlan[dateKey];
+        
+        return `
+            <div class="meal-day" data-date="${dateKey}">
+                <div class="meal-day-header">${day}</div>
+                <div class="meal-day-date">${date.getDate()}.${date.getMonth() + 1}</div>
+                <div class="meal-slot ${meal ? 'filled' : ''}" data-date="${dateKey}">
+                    ${meal ? escapeHtml(meal) : '+ Legg til'}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add click handlers
+    grid.querySelectorAll('.meal-slot').forEach(slot => {
+        slot.onclick = () => selectMealForDate(slot.dataset.date);
+    });
+}
+
+function selectMealForDate(dateKey) {
+    // Show recipe selection
+    const recipes = state.recipes.map(r => r.name);
+    
+    if (recipes.length === 0) {
+        showToast('Du har ingen oppskrifter å velge fra', 'warning');
         return;
     }
     
-    closeAIScanner();
+    const selected = prompt('Velg oppskrift for denne dagen:\n\n' + recipes.map((r, i) => `${i + 1}. ${r}`).join('\n') + '\n\nSkriv nummer eller oppskriftsnavn:');
     
-    if (currentScanTarget === 'ingredients') {
-        const ingredientsField = $('recipeIngredients');
-        if (ingredientsField) {
-            ingredientsField.value = scannedText;
-            ingredientsField.focus();
+    if (selected) {
+        let mealName = selected;
+        const num = parseInt(selected);
+        if (!isNaN(num) && num > 0 && num <= recipes.length) {
+            mealName = recipes[num - 1];
         }
-        showToast('Ingredienser lagt til!', 'success');
         
-    } else if (currentScanTarget === 'instructions') {
-        const instructionsField = $('recipeInstructions');
-        if (instructionsField) {
-            instructionsField.value = scannedText;
-            instructionsField.focus();
+        state.mealPlan[dateKey] = mealName;
+        saveMealPlan();
+        renderMealPlannerWeek();
+        updatePlannedMealsCount();
+        showToast(`${mealName} lagt til!`, 'success');
+    }
+}
+
+function addToMealPlanFromSearch(recipeName) {
+    const today = new Date();
+    const dateKey = today.toISOString().split('T')[0];
+    state.mealPlan[dateKey] = recipeName;
+    saveMealPlan();
+    updatePlannedMealsCount();
+    showToast(`${recipeName} lagt til i dagens meny!`, 'success');
+}
+
+async function saveMealPlan() {
+    try {
+        await saveToFirestore('settings', 'mealPlan', { data: state.mealPlan });
+    } catch (e) {
+        console.warn('Could not save meal plan:', e);
+    }
+}
+
+function clearCurrentWeekPlan() {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1 + (state.currentWeekOffset * 7));
+    
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
+        const dateKey = date.toISOString().split('T')[0];
+        delete state.mealPlan[dateKey];
+    }
+    
+    saveMealPlan();
+    renderMealPlannerWeek();
+    updatePlannedMealsCount();
+    showToast('Ukemeny tømt', 'success');
+}
+
+function generateShoppingListFromPlan() {
+    const ingredients = new Set();
+    
+    Object.values(state.mealPlan).forEach(mealName => {
+        const recipe = state.recipes.find(r => r.name === mealName);
+        if (recipe && recipe.ingredients) {
+            recipe.ingredients.split('\n').forEach(ing => {
+                if (ing.trim()) ingredients.add(ing.trim());
+            });
         }
-        showToast('Fremgangsmåte lagt til!', 'success');
-        
+    });
+    
+    if (ingredients.size === 0) {
+        showToast('Ingen ingredienser å legge til', 'warning');
+        return;
+    }
+    
+    state.shoppingList = [...ingredients].map(ing => ({ text: ing, checked: false }));
+    saveShoppingList();
+    closeMealPlanner();
+    openShoppingList();
+    showToast(`${ingredients.size} ingredienser lagt til handlelisten!`, 'success');
+}
+
+// ===== SHOPPING LIST =====
+function openShoppingList() {
+    const modal = $('shoppingListModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        renderShoppingList();
+        setupShoppingListEvents();
+    }
+}
+
+function closeShoppingList() {
+    const modal = $('shoppingListModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function setupShoppingListEvents() {
+    const closeBtn = $('closeShoppingListBtn');
+    const overlay = document.querySelector('#shoppingListModal .feature-modal-overlay');
+    const addItemBtn = $('addShoppingItemBtn');
+    const clearCheckedBtn = $('clearCheckedBtn');
+    const shareListBtn = $('shareShoppingListBtn');
+    
+    if (closeBtn) closeBtn.onclick = closeShoppingList;
+    if (overlay) overlay.onclick = closeShoppingList;
+    if (addItemBtn) addItemBtn.onclick = addShoppingItem;
+    if (clearCheckedBtn) clearCheckedBtn.onclick = clearCheckedItems;
+    if (shareListBtn) shareListBtn.onclick = shareShoppingList;
+}
+
+function renderShoppingList() {
+    const container = $('shoppingListItems');
+    if (!container) return;
+    
+    if (state.shoppingList.length === 0) {
+        container.innerHTML = `
+            <div class="shopping-list-empty">
+                <span>🛒</span>
+                <p>Handlelisten er tom</p>
+                <p>Generer fra ukemeny eller legg til manuelt</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = state.shoppingList.map((item, i) => `
+        <div class="shopping-item ${item.checked ? 'checked' : ''}">
+            <input type="checkbox" ${item.checked ? 'checked' : ''} data-index="${i}">
+            <span class="shopping-item-text">${escapeHtml(item.text)}</span>
+            <button class="shopping-item-delete" data-index="${i}">🗑️</button>
+        </div>
+    `).join('');
+    
+    // Add event handlers
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.onchange = () => {
+            const index = parseInt(cb.dataset.index);
+            state.shoppingList[index].checked = cb.checked;
+            saveShoppingList();
+            renderShoppingList();
+        };
+    });
+    
+    container.querySelectorAll('.shopping-item-delete').forEach(btn => {
+        btn.onclick = () => {
+            const index = parseInt(btn.dataset.index);
+            state.shoppingList.splice(index, 1);
+            saveShoppingList();
+            renderShoppingList();
+        };
+    });
+}
+
+function addShoppingItem() {
+    const item = prompt('Legg til vare:');
+    if (item && item.trim()) {
+        state.shoppingList.push({ text: item.trim(), checked: false });
+        saveShoppingList();
+        renderShoppingList();
+    }
+}
+
+function clearCheckedItems() {
+    state.shoppingList = state.shoppingList.filter(item => !item.checked);
+    saveShoppingList();
+    renderShoppingList();
+    showToast('Avkryssede varer fjernet', 'success');
+}
+
+async function shareShoppingList() {
+    const items = state.shoppingList.map(item => `${item.checked ? '✓' : '☐'} ${item.text}`).join('\n');
+    const text = `🛒 Handleliste:\n\n${items}`;
+    
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: 'Handleliste', text });
+        } catch (e) {
+            copyToClipboard(text);
+        }
     } else {
-        // Full recipe - open editor with text
-        openRecipeEditorWithScannedText(scannedText);
+        copyToClipboard(text);
     }
-    
-    currentScanTarget = null;
 }
 
-function openRecipeEditorWithScannedText(text) {
-    // Open editor
-    state.editingRecipe = null;
-    state.tempImages = [];
-    
-    navigateTo('recipeEditorView');
-    
-    const editorTitle = $('editorTitle');
-    if (editorTitle) editorTitle.textContent = 'Ny Oppskrift (fra skanning)';
-    
-    // Clear form
-    const form = $('recipeForm');
-    if (form) form.reset();
-    
-    // Parse the scanned text intelligently
-    const parsed = parseScannedRecipe(text);
-    
-    // Fill in fields
-    if (parsed.name && $('recipeName')) {
-        $('recipeName').value = parsed.name;
+async function saveShoppingList() {
+    try {
+        await saveToFirestore('settings', 'shoppingList', { data: state.shoppingList });
+    } catch (e) {
+        console.warn('Could not save shopping list:', e);
     }
-    if (parsed.ingredients && $('recipeIngredients')) {
-        $('recipeIngredients').value = parsed.ingredients;
-    }
-    if (parsed.instructions && $('recipeInstructions')) {
-        $('recipeInstructions').value = parsed.instructions;
-    }
-    
-    showToast('Oppskrift skannet! Sjekk og rediger om nødvendig.', 'success');
 }
 
-function parseScannedRecipe(text) {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+// ===== COOKING TIMER =====
+function openTimer() {
+    const modal = $('timerModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        renderTimerDisplay();
+        setupTimerEvents();
+    }
+}
+
+function closeTimer() {
+    const modal = $('timerModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function setupTimerEvents() {
+    const closeBtn = $('closeTimerBtn');
+    const overlay = document.querySelector('#timerModal .feature-modal-overlay');
+    const startBtn = $('timerStartBtn');
+    const pauseBtn = $('timerPauseBtn');
+    const resetBtn = $('timerResetBtn');
     
-    let name = '';
-    let ingredients = [];
-    let instructions = [];
-    let currentSection = 'unknown';
+    if (closeBtn) closeBtn.onclick = closeTimer;
+    if (overlay) overlay.onclick = closeTimer;
+    if (startBtn) startBtn.onclick = startTimer;
+    if (pauseBtn) pauseBtn.onclick = pauseTimer;
+    if (resetBtn) resetBtn.onclick = resetTimer;
     
-    for (const line of lines) {
-        const lowerLine = line.toLowerCase();
-        
-        // Detect section headers
-        if (lowerLine.includes('ingrediens') || lowerLine.includes('du trenger')) {
-            currentSection = 'ingredients';
-            continue;
-        }
-        if (lowerLine.includes('fremgangsmåte') || lowerLine.includes('slik gjør du') || 
-            lowerLine.includes('tilberedning') || lowerLine.includes('gjør slik')) {
-            currentSection = 'instructions';
-            continue;
-        }
-        
-        // Try to detect recipe name (usually first non-empty line)
-        if (!name && lines.indexOf(line) < 3 && line.length < 60 && 
-            !line.startsWith('-') && !line.match(/^\d/)) {
-            name = line;
-            continue;
-        }
-        
-        // Add to appropriate section
-        if (currentSection === 'ingredients' || line.startsWith('-') || line.match(/^\d+\s*(g|dl|ts|ss|stk)/i)) {
-            ingredients.push(line);
-            currentSection = 'ingredients';
-        } else if (currentSection === 'instructions' || line.match(/^\d+\./)) {
-            instructions.push(line);
-            currentSection = 'instructions';
-        } else if (currentSection === 'unknown') {
-            // Guess based on content
-            if (line.match(/^\d+\s*(g|dl|ml|ts|ss|stk|kg)/i) || line.startsWith('-')) {
-                ingredients.push(line);
-            } else {
-                instructions.push(line);
-            }
-        }
+    // Presets
+    $$('.timer-preset').forEach(preset => {
+        preset.onclick = () => {
+            const minutes = parseInt(preset.dataset.minutes);
+            timerSeconds = minutes * 60;
+            timerLabel = preset.textContent;
+            $$('.timer-preset').forEach(p => p.classList.remove('active'));
+            preset.classList.add('active');
+            renderTimerDisplay();
+        };
+    });
+    
+    // Custom input
+    const customMinutes = $('customMinutes');
+    if (customMinutes) {
+        customMinutes.onchange = () => {
+            const minutes = parseInt(customMinutes.value) || 0;
+            timerSeconds = minutes * 60;
+            timerLabel = `${minutes} min`;
+            $$('.timer-preset').forEach(p => p.classList.remove('active'));
+            renderTimerDisplay();
+        };
+    }
+}
+
+function renderTimerDisplay() {
+    const display = $('timerDisplay');
+    const floatingDisplay = $('floatingTimerDisplay');
+    
+    const minutes = Math.floor(timerSeconds / 60);
+    const seconds = timerSeconds % 60;
+    const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    
+    if (display) {
+        display.textContent = timeStr;
+        display.classList.toggle('running', timerRunning);
+        display.classList.toggle('finished', timerSeconds === 0 && !timerRunning && timerLabel);
     }
     
-    return {
-        name: name,
-        ingredients: ingredients.join('\n'),
-        instructions: instructions.join('\n')
-    };
+    if (floatingDisplay) {
+        floatingDisplay.textContent = timeStr;
+        floatingDisplay.classList.toggle('running', timerRunning);
+        floatingDisplay.classList.toggle('finished', timerSeconds === 0 && !timerRunning && timerLabel);
+    }
+    
+    // Show/hide floating timer
+    const floatingTimer = $('floatingTimer');
+    if (floatingTimer) {
+        floatingTimer.classList.toggle('hidden', !timerRunning && timerSeconds === 0);
+    }
+}
+
+function startTimer() {
+    if (timerSeconds <= 0) {
+        showToast('Velg en tid først', 'warning');
+        return;
+    }
+    
+    timerRunning = true;
+    
+    timerInterval = setInterval(() => {
+        if (timerSeconds > 0) {
+            timerSeconds--;
+            renderTimerDisplay();
+        } else {
+            // Timer finished!
+            clearInterval(timerInterval);
+            timerRunning = false;
+            renderTimerDisplay();
+            timerFinished();
+        }
+    }, 1000);
+    
+    renderTimerDisplay();
+    showToast('Timer startet! ⏱️', 'success');
+}
+
+function pauseTimer() {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    renderTimerDisplay();
+}
+
+function resetTimer() {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    timerSeconds = 0;
+    timerLabel = '';
+    $$('.timer-preset').forEach(p => p.classList.remove('active'));
+    renderTimerDisplay();
+}
+
+function timerFinished() {
+    // Sound notification (if possible)
+    try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleR4Idce/bABKXbz/AAAA');
+        audio.play().catch(() => {});
+    } catch (e) {}
+    
+    // Visual notification
+    showToast(`⏰ ${timerLabel || 'Timer'} er ferdig!`, 'success');
+    triggerConfetti();
+    
+    // Browser notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('⏰ Timer ferdig!', { body: timerLabel || 'Tiden er ute!' });
+    }
+}
+
+// ===== LANGUAGE SELECTOR =====
+function openLanguageSelector() {
+    const modal = $('languageModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        setupLanguageEvents();
+        updateLanguageButtons();
+    }
+}
+
+function closeLanguageSelector() {
+    const modal = $('languageModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function setupLanguageEvents() {
+    const closeBtn = $('closeLanguageBtn');
+    const overlay = document.querySelector('#languageModal .feature-modal-overlay');
+    
+    if (closeBtn) closeBtn.onclick = closeLanguageSelector;
+    if (overlay) overlay.onclick = closeLanguageSelector;
+    
+    $$('.language-btn').forEach(btn => {
+        btn.onclick = () => {
+            const lang = btn.dataset.lang;
+            setLanguage(lang);
+            closeLanguageSelector();
+        };
+    });
+}
+
+function updateLanguageButtons() {
+    $$('.language-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === currentLanguage);
+    });
+}
+
+function setLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('kokebok_language', lang);
+    showToast(`Språk endret til ${getLanguageName(lang)}`, 'success');
+    // In a full implementation, this would update all UI text
+}
+
+function getLanguageName(code) {
+    const names = { no: 'Norsk', en: 'English', sv: 'Svenska', da: 'Dansk', de: 'Deutsch' };
+    return names[code] || code;
+}
+
+// ===== PORTION CALCULATOR =====
+function openPortionCalculator() {
+    const modal = $('portionCalculatorModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        setupPortionCalculatorEvents();
+    }
+}
+
+function closePortionCalculator() {
+    const modal = $('portionCalculatorModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function setupPortionCalculatorEvents() {
+    const closeBtn = $('closePortionCalculatorBtn');
+    const overlay = document.querySelector('#portionCalculatorModal .feature-modal-overlay');
+    const minusBtn = $('portionMinusBtn');
+    const plusBtn = $('portionPlusBtn');
+    
+    if (closeBtn) closeBtn.onclick = closePortionCalculator;
+    if (overlay) overlay.onclick = closePortionCalculator;
+    if (minusBtn) minusBtn.onclick = () => adjustPortions(-1);
+    if (plusBtn) plusBtn.onclick = () => adjustPortions(1);
+}
+
+function adjustPortions(delta) {
+    const originalInput = $('originalPortions');
+    const newInput = $('newPortions');
+    
+    if (!newInput) return;
+    
+    let newValue = (parseInt(newInput.value) || 4) + delta;
+    if (newValue < 1) newValue = 1;
+    if (newValue > 50) newValue = 50;
+    
+    newInput.value = newValue;
+    calculateAdjustedIngredients();
+}
+
+function calculateAdjustedIngredients() {
+    const originalInput = $('originalPortions');
+    const newInput = $('newPortions');
+    const container = $('adjustedIngredients');
+    
+    if (!container || !state.currentRecipe) return;
+    
+    const originalPortions = parseInt(originalInput?.value) || 4;
+    const newPortions = parseInt(newInput?.value) || 4;
+    const multiplier = newPortions / originalPortions;
+    
+    const ingredients = state.currentRecipe.ingredients?.split('\n') || [];
+    
+    container.innerHTML = ingredients.map(ing => {
+        // Try to parse numbers
+        const adjusted = ing.replace(/(\d+(?:[.,]\d+)?)/g, (match) => {
+            const num = parseFloat(match.replace(',', '.'));
+            const result = (num * multiplier).toFixed(1).replace('.0', '');
+            return result;
+        });
+        
+        return `
+            <div class="adjusted-ingredient">
+                <span>${escapeHtml(adjusted)}</span>
+                ${adjusted !== ing ? `<span class="adjusted-amount">×${multiplier.toFixed(1)}</span>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+// ===== FAVORITES =====
+function filterFavorites() {
+    state.filterCategory = '';
+    // In a real implementation, this would filter by favorite flag
+    showToast('Viser favoritter', 'info');
+}
+
+function toggleFavorite(recipeId) {
+    const index = state.favorites.indexOf(recipeId);
+    if (index === -1) {
+        state.favorites.push(recipeId);
+        showToast('Lagt til i favoritter ⭐', 'success');
+    } else {
+        state.favorites.splice(index, 1);
+        showToast('Fjernet fra favoritter', 'info');
+    }
+    saveFavorites();
+    updateFavoritesCount();
+}
+
+async function saveFavorites() {
+    try {
+        await saveToFirestore('settings', 'favorites', { data: state.favorites });
+    } catch (e) {
+        console.warn('Could not save favorites:', e);
+    }
+}
+
+function updateFavoritesCount() {
+    const el = $('statFavorites');
+    if (el) {
+        const count = state.favorites.length;
+        el.querySelector('.stat-value').textContent = count;
+    }
+}
+
+function updatePlannedMealsCount() {
+    const el = $('statPlanned');
+    if (el) {
+        const count = Object.keys(state.mealPlan).length;
+        el.querySelector('.stat-value').textContent = count;
+    }
 }
 
 // ===== CONFETTI EFFECT =====
@@ -2355,23 +2871,49 @@ function showToast(message, type = 'info') {
 // ===== Initialize =====
 document.addEventListener('DOMContentLoaded', () => {
     setupAuth();
-    setupScanButtons();
+    requestNotificationPermission();
 });
 
-// Setup scan buttons in recipe editor
-function setupScanButtons() {
-    on('scanIngredientsBtn', 'click', () => {
-        currentScanTarget = 'ingredients';
-        openAIScanner();
-    });
-    
-    on('scanInstructionsBtn', 'click', () => {
-        currentScanTarget = 'instructions';
-        openAIScanner();
-    });
+// Request notification permission for timer
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+// Load extra settings after user login
+async function loadExtraSettings() {
+    try {
+        // Load favorites
+        const favSettings = await loadCollection('settings');
+        const favDoc = favSettings.find(s => s.id === 'favorites');
+        if (favDoc?.data) state.favorites = favDoc.data;
+        
+        // Load meal plan
+        const mealPlanDoc = favSettings.find(s => s.id === 'mealPlan');
+        if (mealPlanDoc?.data) state.mealPlan = mealPlanDoc.data;
+        
+        // Load shopping list
+        const shoppingDoc = favSettings.find(s => s.id === 'shoppingList');
+        if (shoppingDoc?.data) state.shoppingList = shoppingDoc.data;
+        
+        updateFavoritesCount();
+        updatePlannedMealsCount();
+    } catch (e) {
+        console.warn('Could not load extra settings:', e);
+    }
 }
 
 // Make functions available globally for onclick handlers
 window.openRecipeEditor = openRecipeEditor;
 window.openBookEditor = openBookEditor;
 window.closeModal = closeModal;
+window.saveExternalRecipe = saveExternalRecipe;
+window.addToMealPlanFromSearch = addToMealPlanFromSearch;
+window.openRecipeSearch = openRecipeSearch;
+window.openMealPlanner = openMealPlanner;
+window.openShoppingList = openShoppingList;
+window.openTimer = openTimer;
+window.openLanguageSelector = openLanguageSelector;
+window.openPortionCalculator = openPortionCalculator;
+window.toggleFavorite = toggleFavorite;

@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=1.2">
+    <link rel="stylesheet" href="style.css?v=3.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -105,7 +105,7 @@
                     <div class="welcome-icon">📖</div>
                 </div>
 
-                <!-- Quick Actions -->
+                <!-- Quick Actions - Primary Row -->
                 <div class="quick-actions">
                     <button id="addRecipeBtn" class="quick-action-btn primary">
                         <span class="action-icon">➕</span>
@@ -121,6 +121,27 @@
                     </button>
                 </div>
 
+                <!-- Feature Buttons Row -->
+                <div class="feature-buttons">
+                    <button id="searchRecipesBtn" class="feature-btn search-btn">
+                        <span class="feature-icon">🔍</span>
+                        <span class="feature-text">Finn oppskrifter</span>
+                        <span class="feature-badge">Ny!</span>
+                    </button>
+                    <button id="mealPlannerBtn" class="feature-btn planner-btn">
+                        <span class="feature-icon">📅</span>
+                        <span class="feature-text">Ukemeny</span>
+                    </button>
+                    <button id="shoppingListBtn" class="feature-btn shopping-btn">
+                        <span class="feature-icon">🛒</span>
+                        <span class="feature-text">Handleliste</span>
+                    </button>
+                    <button id="timerBtn" class="feature-btn timer-btn">
+                        <span class="feature-icon">⏱️</span>
+                        <span class="feature-text">Timer</span>
+                    </button>
+                </div>
+
                 <!-- Stats Cards -->
                 <div class="stats-row">
                     <div class="stat-card" id="statRecipes">
@@ -133,15 +154,15 @@
                         <span class="stat-value">0</span>
                         <span class="stat-label">Kokebøker</span>
                     </div>
-                    <div class="stat-card" id="statCategories">
-                        <span class="stat-icon">🏷️</span>
+                    <div class="stat-card" id="statFavorites" onclick="navigateTo('favoritesView')">
+                        <span class="stat-icon">⭐</span>
                         <span class="stat-value">0</span>
-                        <span class="stat-label">Kategorier</span>
+                        <span class="stat-label">Favoritter</span>
                     </div>
-                    <div class="stat-card" id="statImages">
-                        <span class="stat-icon">📸</span>
+                    <div class="stat-card" id="statMeals">
+                        <span class="stat-icon">🍽️</span>
                         <span class="stat-value">0</span>
-                        <span class="stat-label">Bilder</span>
+                        <span class="stat-label">Planlagt</span>
                     </div>
                 </div>
 
@@ -261,35 +282,32 @@
 
                     <div class="form-group">
                         <label for="recipeIngredients">Ingredienser</label>
-                        <div class="form-hint-row">
-                            <p class="form-hint">Skriv av ingrediensene fra bildet</p>
-                            <button type="button" id="scanIngredientsBtn" class="mini-scan-btn" title="Skann med AI">
-                                🤖 Skann
-                            </button>
-                        </div>
+                        <p class="form-hint">Skriv inn ingrediensene</p>
                         <textarea id="recipeIngredients" rows="8" placeholder="- 500g kjøttdeig&#10;- 1 løk&#10;- 2 dl melk&#10;- 1 egg&#10;..."></textarea>
                     </div>
 
                     <div class="form-group">
                         <label for="recipeInstructions">Fremgangsmåte</label>
-                        <div class="form-hint-row">
-                            <p class="form-hint">Skriv av fremgangsmåten fra bildet</p>
-                            <button type="button" id="scanInstructionsBtn" class="mini-scan-btn" title="Skann med AI">
-                                🤖 Skann
-                            </button>
-                        </div>
+                        <p class="form-hint">Skriv inn fremgangsmåten</p>
                         <textarea id="recipeInstructions" rows="12" placeholder="1. Bland kjøttdeig med hakket løk...&#10;2. Tilsett egg og melk...&#10;3. Form til kjøttkaker..."></textarea>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group half">
                             <label for="recipeServings">Porsjoner</label>
-                            <input type="text" id="recipeServings" placeholder="F.eks. 4 personer">
+                            <input type="number" id="recipeServings" placeholder="4" min="1">
                         </div>
                         <div class="form-group half">
-                            <label for="recipePrepTime">Tid</label>
-                            <input type="text" id="recipePrepTime" placeholder="F.eks. 45 min">
+                            <label for="recipePrepTime">Tid (minutter)</label>
+                            <input type="number" id="recipePrepTime" placeholder="45" min="1">
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="recipeFavorite">
+                            <span>⭐ Merk som favoritt</span>
+                        </label>
                     </div>
 
                     <div class="form-group">
@@ -458,9 +476,9 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v2.0.0</p>
+                        <p class="app-version">Familiens Kokebok v3.0.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
-                        <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">Med AI-drevet tekstgjenkjenning</p>
+                        <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">100% privat - ingen AI lærer av dine oppskrifter</p>
                     </div>
                 </div>
             </section>
@@ -512,7 +530,27 @@
                 <button class="menu-item" data-view="categoriesView">
                     <span>🏷️</span> Kategorier
                 </button>
+                <button class="menu-item" id="menuFavorites">
+                    <span>⭐</span> Favoritter
+                </button>
                 <hr class="menu-divider">
+                <button class="menu-item" id="menuSearchRecipes">
+                    <span>🔍</span> Finn oppskrifter
+                    <span class="menu-badge">Ny!</span>
+                </button>
+                <button class="menu-item" id="menuMealPlanner">
+                    <span>📅</span> Ukemeny
+                </button>
+                <button class="menu-item" id="menuShoppingList">
+                    <span>🛒</span> Handleliste
+                </button>
+                <button class="menu-item" id="menuTimer">
+                    <span>⏱️</span> Koketimer
+                </button>
+                <hr class="menu-divider">
+                <button class="menu-item" id="menuLanguage">
+                    <span>🌍</span> Språk
+                </button>
                 <button class="menu-item" data-view="settingsView">
                     <span>⚙️</span> Innstillinger
                 </button>
@@ -552,99 +590,228 @@
         </div>
     </div>
 
-    <!-- AI Scanner Modal -->
-    <div id="aiScannerModal" class="ai-scanner-modal hidden">
-        <div class="ai-scanner-overlay"></div>
-        <div class="ai-scanner-content">
-            <div class="ai-scanner-header">
-                <h3>🤖 AI Oppskriftsleser</h3>
-                <button id="closeScannerBtn" class="scanner-close-btn">✕</button>
+    <!-- Recipe Search Modal (Søk etter nye oppskrifter) -->
+    <div id="recipeSearchModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content">
+            <div class="feature-modal-header gradient-header">
+                <h3>🔍 Oppskriftssøk</h3>
+                <p>Finn oppskrifter du ikke har i samlingen</p>
+                <button id="closeRecipeSearchBtn" class="modal-close-btn">✕</button>
             </div>
-            <div class="ai-scanner-body">
-                <!-- Step 1: Upload -->
-                <div id="scanStep1" class="scan-step active">
-                    <div class="scan-upload-area" id="scanDropZone">
-                        <div class="scan-upload-icon">📷</div>
-                        <h4>Last opp bilde av oppskriften</h4>
-                        <p>Dra og slipp, eller klikk for å velge</p>
-                        <div class="scan-upload-buttons">
-                            <button id="scanUploadBtn" class="scan-btn primary">
-                                <span>📁</span> Velg fil
-                            </button>
-                            <button id="scanCameraBtn" class="scan-btn secondary">
-                                <span>📷</span> Ta bilde
-                            </button>
-                        </div>
-                        <input type="file" id="scanFileInput" accept="image/*" hidden>
-                        <input type="file" id="scanCameraInput" accept="image/*" capture="environment" hidden>
-                    </div>
-                    <div id="scanPreview" class="scan-preview hidden">
-                        <img id="scanPreviewImage" src="" alt="Forhåndsvisning">
-                        <button id="removeScanImage" class="remove-scan-btn">🗑️ Fjern</button>
-                    </div>
+            <div class="feature-modal-body">
+                <div class="search-input-group">
+                    <input type="text" id="recipeSearchInput" placeholder="Søk etter oppskrift... (f.eks. 'lasagne', 'bløtkake')" autocomplete="off">
+                    <button id="doRecipeSearchBtn" class="search-action-btn">🔍</button>
                 </div>
-
-                <!-- Step 2: Processing -->
-                <div id="scanStep2" class="scan-step">
-                    <div class="scan-processing">
-                        <div class="scan-loader">
-                            <div class="scan-loader-ring"></div>
-                            <div class="scan-loader-icon">🔍</div>
-                        </div>
-                        <h4 id="scanStatusText">Analyserer bildet...</h4>
-                        <div class="scan-progress-bar">
-                            <div id="scanProgressFill" class="scan-progress-fill"></div>
-                        </div>
-                        <p id="scanProgressText" class="scan-progress-text">0%</p>
-                    </div>
+                <div class="search-filters">
+                    <select id="searchCategoryFilter">
+                        <option value="">Alle kategorier</option>
+                        <option value="Dessert">Desserter</option>
+                        <option value="Seafood">Sjømat</option>
+                        <option value="Chicken">Kylling</option>
+                        <option value="Beef">Biff</option>
+                        <option value="Pasta">Pasta</option>
+                        <option value="Vegetarian">Vegetar</option>
+                        <option value="Breakfast">Frokost</option>
+                        <option value="Side">Tilbehør</option>
+                    </select>
                 </div>
-
-                <!-- Step 3: Results -->
-                <div id="scanStep3" class="scan-step">
-                    <div class="scan-results">
-                        <div class="scan-results-header">
-                            <span class="scan-success-icon">✨</span>
-                            <h4>Tekst funnet!</h4>
-                            <p>Rediger teksten før du fortsetter</p>
-                        </div>
-                        <div class="scan-text-container">
-                            <textarea id="scannedText" rows="12" placeholder="Skannet tekst vises her..."></textarea>
-                        </div>
-                        <div class="scan-actions">
-                            <button id="scanAgainBtn" class="scan-btn secondary">
-                                <span>🔄</span> Skann på nytt
-                            </button>
-                            <button id="useScannedTextBtn" class="scan-btn primary">
-                                <span>✅</span> Bruk teksten
-                            </button>
-                        </div>
+                <div id="searchResults" class="search-results">
+                    <div class="search-placeholder">
+                        <span>🍳</span>
+                        <p>Søk etter din favorittrett!</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Add Recipe Choice Modal -->
-    <div id="addRecipeChoiceModal" class="choice-modal hidden">
-        <div class="choice-modal-overlay"></div>
-        <div class="choice-modal-content">
-            <h3>🍽️ Legg til oppskrift</h3>
-            <p>Hvordan vil du legge til oppskriften?</p>
-            <div class="choice-options">
-                <button id="choiceManual" class="choice-btn">
-                    <span class="choice-icon">✏️</span>
-                    <span class="choice-title">Skriv manuelt</span>
-                    <span class="choice-desc">Skriv inn oppskriften selv</span>
-                </button>
-                <button id="choiceScan" class="choice-btn featured">
-                    <span class="choice-badge">AI</span>
-                    <span class="choice-icon">📷</span>
-                    <span class="choice-title">Skann med AI</span>
-                    <span class="choice-desc">Ta bilde og la AI lese teksten</span>
-                </button>
+    <!-- Meal Planner Modal (Ukemeny) -->
+    <div id="mealPlannerModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content large">
+            <div class="feature-modal-header gradient-header-green">
+                <h3>📅 Ukemeny</h3>
+                <p>Planlegg ukens måltider</p>
+                <button id="closeMealPlannerBtn" class="modal-close-btn">✕</button>
             </div>
-            <button id="closeChoiceModal" class="choice-cancel">Avbryt</button>
+            <div class="feature-modal-body">
+                <div class="week-navigation">
+                    <button id="prevWeekBtn" class="week-nav-btn">◀ Forrige</button>
+                    <span id="currentWeekLabel">Uke 1, 2026</span>
+                    <button id="nextWeekBtn" class="week-nav-btn">Neste ▶</button>
+                </div>
+                <div id="mealPlannerGrid" class="meal-planner-grid">
+                    <!-- Days will be rendered here -->
+                </div>
+                <div class="meal-planner-actions">
+                    <button id="generateShoppingListBtn" class="action-btn primary">
+                        <span>🛒</span> Lag handleliste
+                    </button>
+                    <button id="clearMealPlanBtn" class="action-btn secondary">
+                        <span>🗑️</span> Tøm uken
+                    </button>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <!-- Shopping List Modal (Handleliste) -->
+    <div id="shoppingListModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content">
+            <div class="feature-modal-header gradient-header-orange">
+                <h3>🛒 Handleliste</h3>
+                <p>Din automatisk genererte handleliste</p>
+                <button id="closeShoppingListBtn" class="modal-close-btn">✕</button>
+            </div>
+            <div class="feature-modal-body">
+                <div id="shoppingListContent" class="shopping-list">
+                    <!-- Shopping items rendered here -->
+                </div>
+                <div class="shopping-list-actions">
+                    <button id="addShoppingItemBtn" class="action-btn secondary">
+                        <span>➕</span> Legg til vare
+                    </button>
+                    <button id="shareShoppingListBtn" class="action-btn primary">
+                        <span>📤</span> Del liste
+                    </button>
+                    <button id="clearShoppingListBtn" class="action-btn danger">
+                        <span>🗑️</span> Tøm liste
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cooking Timer Modal -->
+    <div id="timerModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content compact">
+            <div class="feature-modal-header gradient-header-red">
+                <h3>⏱️ Koketimer</h3>
+                <button id="closeTimerBtn" class="modal-close-btn">✕</button>
+            </div>
+            <div class="feature-modal-body">
+                <div class="timer-display">
+                    <div id="timerValue" class="timer-value">00:00</div>
+                    <div class="timer-label" id="timerLabel">Klar</div>
+                </div>
+                <div class="timer-presets">
+                    <button class="timer-preset" data-minutes="1">1 min</button>
+                    <button class="timer-preset" data-minutes="3">3 min</button>
+                    <button class="timer-preset" data-minutes="5">5 min</button>
+                    <button class="timer-preset" data-minutes="10">10 min</button>
+                    <button class="timer-preset" data-minutes="15">15 min</button>
+                    <button class="timer-preset" data-minutes="20">20 min</button>
+                    <button class="timer-preset" data-minutes="30">30 min</button>
+                    <button class="timer-preset" data-minutes="45">45 min</button>
+                    <button class="timer-preset" data-minutes="60">1 time</button>
+                </div>
+                <div class="timer-custom">
+                    <input type="number" id="customMinutes" placeholder="Minutter" min="1" max="999">
+                    <button id="setCustomTimerBtn" class="action-btn secondary">Sett</button>
+                </div>
+                <div class="timer-controls">
+                    <button id="startTimerBtn" class="timer-btn start">▶ Start</button>
+                    <button id="pauseTimerBtn" class="timer-btn pause hidden">⏸ Pause</button>
+                    <button id="resetTimerBtn" class="timer-btn reset">↺ Nullstill</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Favorites View in Side Menu will be added -->
+
+    <!-- Language Selector Modal -->
+    <div id="languageModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content compact">
+            <div class="feature-modal-header gradient-header-purple">
+                <h3>🌍 Velg språk</h3>
+                <button id="closeLanguageBtn" class="modal-close-btn">✕</button>
+            </div>
+            <div class="feature-modal-body">
+                <div class="language-options">
+                    <button class="language-btn active" data-lang="no">
+                        <span class="flag">🇳🇴</span>
+                        <span>Norsk</span>
+                    </button>
+                    <button class="language-btn" data-lang="en">
+                        <span class="flag">🇬🇧</span>
+                        <span>English</span>
+                    </button>
+                    <button class="language-btn" data-lang="sv">
+                        <span class="flag">🇸🇪</span>
+                        <span>Svenska</span>
+                    </button>
+                    <button class="language-btn" data-lang="da">
+                        <span class="flag">🇩🇰</span>
+                        <span>Dansk</span>
+                    </button>
+                    <button class="language-btn" data-lang="de">
+                        <span class="flag">🇩🇪</span>
+                        <span>Deutsch</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portion Calculator Modal -->
+    <div id="portionModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content compact">
+            <div class="feature-modal-header gradient-header-teal">
+                <h3>🔢 Porsjonsregulator</h3>
+                <button id="closePortionBtn" class="modal-close-btn">✕</button>
+            </div>
+            <div class="feature-modal-body">
+                <div class="portion-controls">
+                    <label>Original antall porsjoner:</label>
+                    <input type="number" id="originalPortions" value="4" min="1">
+                    <label>Ønsket antall porsjoner:</label>
+                    <div class="portion-adjuster">
+                        <button id="decreasePortions" class="portion-btn">−</button>
+                        <input type="number" id="desiredPortions" value="4" min="1">
+                        <button id="increasePortions" class="portion-btn">+</button>
+                    </div>
+                </div>
+                <div id="adjustedIngredients" class="adjusted-ingredients">
+                    <!-- Adjusted ingredients shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Recipe View (for searched recipes) -->
+    <div id="quickRecipeModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content large">
+            <div class="feature-modal-header gradient-header">
+                <h3 id="quickRecipeTitle">Oppskrift</h3>
+                <button id="closeQuickRecipeBtn" class="modal-close-btn">✕</button>
+            </div>
+            <div class="feature-modal-body">
+                <div id="quickRecipeContent" class="quick-recipe-content">
+                    <!-- Recipe content -->
+                </div>
+                <div class="quick-recipe-actions">
+                    <button id="saveSearchedRecipeBtn" class="action-btn primary">
+                        <span>💾</span> Lagre i min kokebok
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button for Timer -->
+    <div id="floatingTimer" class="floating-timer hidden">
+        <div class="floating-timer-display">
+            <span id="floatingTimerValue">00:00</span>
+        </div>
+        <button id="floatingTimerBtn" class="floating-timer-btn" title="Åpne timer">⏱️</button>
     </div>
 
     <!-- Confetti Canvas -->
@@ -654,9 +821,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <!-- Tesseract.js for OCR -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="firebase-config.js?v=1.2"></script>
-    <script src="app.js?v=1.2"></script>
+    <script src="firebase-config.js?v=3.0"></script>
+    <script src="app.js?v=3.0"></script>
 </body>
 </html>
