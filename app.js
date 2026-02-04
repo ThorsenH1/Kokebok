@@ -72,12 +72,18 @@ function escapeHtml(text) {
 
 // ===== Firestore Helpers =====
 function userDoc(collection) {
-    if (!state.user) return null;
+    if (!state.user) {
+        console.warn('userDoc: Ingen bruker pålogget');
+        return null;
+    }
     return db.collection('users').doc(state.user.uid).collection(collection);
 }
 
 async function saveToFirestore(collection, id, data) {
-    if (!state.user) return null;
+    if (!state.user) {
+        console.warn('saveToFirestore: Ingen bruker pålogget');
+        return null;
+    }
     
     const docData = { ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
     
@@ -94,7 +100,7 @@ async function saveToFirestore(collection, id, data) {
             return ref.id;
         }
     } catch (e) {
-        console.error('Save error:', e);
+        console.error(`Lagringsfeil (${collection}):`, e.message);
         throw e;
     }
 }
@@ -107,7 +113,7 @@ async function deleteFromFirestore(collection, id) {
         await col.doc(id).delete();
         return true;
     } catch (e) {
-        console.error('Delete error:', e);
+        console.error(`Slettefeil (${collection}/${id}):`, e.message);
         return false;
     }
 }
@@ -119,32 +125,36 @@ async function loadCollection(collection) {
         const snapshot = await col.get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (e) {
-        console.warn(`Could not load ${collection}:`, e.message);
+        console.warn(`Kunne ikke laste ${collection}:`, e.message);
         return [];
     }
 }
 
 // ===== Auth Functions =====
 async function setupAuth() {
-    console.log('🔐 Setting up auth...');
+    console.log('🔐 Initialiserer autentisering...');
     
     try {
         await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     } catch (e) {
-        console.warn('Could not set persistence:', e);
+        console.warn('Kunne ikke sette persistence:', e);
     }
     
-    // Check redirect result
+    // Sjekk redirect resultat først (viktig for iOS/Safari)
     try {
         const result = await auth.getRedirectResult();
         if (result && result.user) {
+            console.log('✓ Bruker hentet fra redirect');
             state.user = result.user;
         }
     } catch (error) {
-        console.error('Redirect result error:', error);
+        // Ignorer redirect-feil hvis bruker ikke kommer fra redirect
+        if (error.code !== 'auth/popup-closed-by-user') {
+            console.warn('Redirect resultat:', error.code);
+        }
     }
     
-    // Login button
+    // Login button - bruker redirect for bedre kompatibilitet
     on('googleLoginBtn', 'click', async () => {
         const btn = $('googleLoginBtn');
         if (btn) {
@@ -155,22 +165,17 @@ async function setupAuth() {
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.addScope('profile');
         provider.addScope('email');
+        provider.setCustomParameters({
+            prompt: 'select_account'
+        });
         
+        // Bruk redirect - fungerer bedre på mobil og unngår popup-problemer
         try {
-            await auth.signInWithPopup(provider);
-        } catch (popupError) {
-            if (popupError.code === 'auth/popup-blocked' || 
-                popupError.code === 'auth/popup-closed-by-user') {
-                try {
-                    await auth.signInWithRedirect(provider);
-                } catch (redirectError) {
-                    showToast('Innlogging feilet. Sjekk at popup ikke er blokkert.', 'error');
-                    resetLoginButton(btn);
-                }
-            } else {
-                showToast('Innlogging feilet: ' + popupError.message, 'error');
-                resetLoginButton(btn);
-            }
+            await auth.signInWithRedirect(provider);
+        } catch (error) {
+            console.error('Login error:', error);
+            showToast('Innlogging feilet. Prøv igjen.', 'error');
+            resetLoginButton(btn);
         }
     });
 
@@ -181,11 +186,17 @@ async function setupAuth() {
         const splashScreen = $('splashScreen');
         
         if (user) {
+            console.log('✓ Bruker pålogget:', user.email);
             state.user = user;
             if (loginScreen) loginScreen.classList.add('hidden');
             if (splashScreen) splashScreen.classList.remove('hidden');
-            await initApp();
+            
+            // Vent litt før initialisering for å sikre at auth er klar
+            setTimeout(async () => {
+                await initApp();
+            }, 100);
         } else {
+            console.log('ℹ Ingen bruker innlogget');
             state.user = null;
             if (loginScreen) loginScreen.classList.remove('hidden');
             if (mainApp) mainApp.classList.add('hidden');
@@ -270,6 +281,7 @@ async function compressImage(file, maxWidth = 1600, maxHeight = 1600, quality = 
 // ===== Initialize App =====
 async function initApp() {
     const splash = $('splashScreen');
+    console.log('🚀 Initialiserer app...');
     
     try {
         await loadAllData();
@@ -282,45 +294,78 @@ async function initApp() {
             if (splash) splash.classList.add('hidden');
             const mainApp = $('mainApp');
             if (mainApp) mainApp.classList.remove('hidden');
+            console.log('✓ App klar!');
         }, 500);
         
         // Register Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js')
-                .then(() => console.log('✓ Service Worker registered'))
-                .catch(err => console.warn('SW registration failed:', err));
+                .then(() => console.log('✓ Service Worker registrert'))
+                .catch(err => console.warn('SW registrering feilet:', err));
         }
         
     } catch (error) {
-        console.error('Init error:', error);
+        console.error('Initialiseringsfeil:', error);
         if (splash) splash.classList.add('hidden');
         const mainApp = $('mainApp');
         if (mainApp) mainApp.classList.remove('hidden');
-        showToast('Kunne ikke laste data', 'error');
+        
+        // Vis appen selv om det er feil - bruker kan fortsatt bruke den
+        renderDashboard();
+        showToast('Noen data kunne ikke lastes. Prøv å oppdatere siden.', 'warning');
     }
 }
 
 async function loadAllData() {
-    // Load categories
-    state.categories = await loadCollection('categories');
+    console.log('📦 Laster data...');
     
-    // Add default categories if missing
-    const existingCatIds = state.categories.map(c => c.id);
-    for (const cat of DEFAULT_CATEGORIES) {
-        if (!existingCatIds.includes(cat.id)) {
-            await saveToFirestore('categories', cat.id, cat);
-            state.categories.push(cat);
-        }
+    // Sjekk at bruker er pålogget
+    if (!state.user) {
+        console.warn('Ingen bruker - kan ikke laste data');
+        return;
     }
     
-    // Load recipes and books
-    state.recipes = await loadCollection('recipes');
-    state.books = await loadCollection('books');
-    
-    // Load settings
-    const settings = await loadCollection('settings');
-    if (settings.length > 0) {
-        state.settings = { ...state.settings, ...settings[0] };
+    try {
+        // Load categories
+        state.categories = await loadCollection('categories');
+        console.log(`  ✓ Kategorier: ${state.categories.length}`);
+        
+        // Add default categories if missing
+        const existingCatIds = state.categories.map(c => c.id);
+        const missingCategories = DEFAULT_CATEGORIES.filter(c => !existingCatIds.includes(c.id));
+        
+        if (missingCategories.length > 0) {
+            console.log(`  + Legger til ${missingCategories.length} standard-kategorier...`);
+            for (const cat of missingCategories) {
+                try {
+                    await saveToFirestore('categories', cat.id, cat);
+                    state.categories.push(cat);
+                } catch (e) {
+                    console.warn(`  Kunne ikke lagre kategori ${cat.id}:`, e.message);
+                }
+            }
+        }
+        
+        // Load recipes and books
+        state.recipes = await loadCollection('recipes');
+        console.log(`  ✓ Oppskrifter: ${state.recipes.length}`);
+        
+        state.books = await loadCollection('books');
+        console.log(`  ✓ Bøker: ${state.books.length}`);
+        
+        // Load settings
+        const settings = await loadCollection('settings');
+        if (settings.length > 0) {
+            state.settings = { ...state.settings, ...settings[0] };
+        }
+        
+        console.log('📦 Data lastet ferdig!');
+    } catch (error) {
+        console.error('Feil ved lasting av data:', error);
+        // Fortsett med tomme arrays - appen vil fortsatt fungere
+        if (state.categories.length === 0) {
+            state.categories = [...DEFAULT_CATEGORIES];
+        }
     }
 }
 
