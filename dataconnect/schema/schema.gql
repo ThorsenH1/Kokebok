@@ -1,0 +1,43 @@
+type User @table {
+  displayName: String!
+  email: String
+  photoUrl: String
+  createdAt: Timestamp!
+}
+
+type Cookbook @table {
+  name: String!
+  author: String
+  publicationYear: Int
+  description: String
+  createdAt: Timestamp!
+  user: User
+}
+
+type Recipe @table {
+  title: String!
+  description: String
+  ingredients: String!
+  instructions: String!
+  prepTime: String
+  cookTime: String
+  servings: String
+  imageUrl: String
+  isPublic: Boolean
+  notes: String
+  createdAt: Timestamp!
+  user: User
+  cookbook: Cookbook
+}
+
+type Category @table {
+  name: String!
+  createdAt: Timestamp!
+  user: User
+}
+
+type RecipeCategory @table(key: ["recipe", "category"]) {
+  createdAt: Timestamp!
+  recipe: Recipe!
+  category: Category!
+}

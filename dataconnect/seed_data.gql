@@ -1,0 +1,98 @@
+mutation CreateSeedData @transaction @auth(level: PUBLIC, insecureReason: "This mutation is for populating seed data and is safe to expose.") {
+  user_insertMany(data: [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      displayName: "demouser1",
+      createdAt: "2024-04-26T12:00:00Z",
+      email: "demouser1@example.com",
+      photoUrl: "https://example.com/demouser1.jpg"
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      displayName: "demouser2",
+      createdAt: "2024-04-26T13:00:00Z",
+      email: "demouser2@example.com",
+      photoUrl: "https://example.com/demouser2.jpg"
+    }
+  ])
+  category_insertMany(data: [
+    {
+      id: "650e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Breakfast",
+      createdAt: "2024-04-26T12:00:00Z"
+    },
+    {
+      id: "650e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      name: "Lunch",
+      createdAt: "2024-04-26T13:00:00Z"
+    }
+  ])
+  cookbook_insertMany(data: [
+    {
+      id: "750e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Awesome Cookbook 1",
+      createdAt: "2024-04-26T12:00:00Z",
+      description: "My first cookbook",
+      author: "demouser1",
+      publicationYear: 2023
+    },
+    {
+      id: "750e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      name: "Bland Cookbook 2",
+      createdAt: "2024-04-26T13:00:00Z",
+      description: "Another cookbook",
+      author: "demouser2",
+      publicationYear: 2024
+    }
+  ])
+  recipe_insertMany(data: [
+    {
+      id: "850e8400-e29b-41d4-a716-446655440000",
+      cookbookId: "750e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      title: "Delicious Recipe 1",
+      createdAt: "2024-04-26T12:00:00Z",
+      ingredients: "Ingredient 1, Ingredient 2",
+      instructions: "Step 1, Step 2",
+      description: "A yummy recipe",
+      isPublic: true,
+      cookTime: "30 minutes",
+      prepTime: "15 minutes",
+      servings: "2",
+      imageUrl: "https://example.com/recipe1.jpg",
+      notes: "Some notes"
+    },
+    {
+      id: "850e8400-e29b-41d4-a716-446655440001",
+      cookbookId: "750e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      title: "Another Recipe",
+      createdAt: "2024-04-26T13:00:00Z",
+      ingredients: "Ingredient A, Ingredient B",
+      instructions: "Step A, Step B",
+      description: "Another recipe",
+      isPublic: false,
+      cookTime: "45 minutes",
+      prepTime: "20 minutes",
+      servings: "4",
+      imageUrl: "https://example.com/recipe2.jpg",
+      notes: "More notes"
+    }
+  ])
+  recipeCategory_insertMany(data: [
+    {
+      recipeId: "850e8400-e29b-41d4-a716-446655440000",
+      categoryId: "650e8400-e29b-41d4-a716-446655440000",
+      createdAt: "2024-04-26T12:00:00Z"
+    },
+    {
+      recipeId: "850e8400-e29b-41d4-a716-446655440001",
+      categoryId: "650e8400-e29b-41d4-a716-446655440001",
+      createdAt: "2024-04-26T13:00:00Z"
+    }
+  ])
+}

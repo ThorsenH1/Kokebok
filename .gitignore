@@ -1,0 +1,16 @@
+# Kokebok - Familiens Kokebok App
+
+## Files
+- index.html
+- style.css
+- app.js
+- firebase-config.js
+- manifest.json
+- sw.js
+- firestore.rules
+- deploy.bat
+
+## Ignore
+node_modules/
+.DS_Store
+*.log

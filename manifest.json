@@ -1,0 +1,50 @@
+{
+    "name": "Familiens Kokebok",
+    "short_name": "Kokebok",
+    "description": "Digitaliser gamle kokebøker og oppskrifter fra bestemødre og oldemødre",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#FDF5E6",
+    "theme_color": "#8B4513",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "icons/icon-192.svg",
+            "sizes": "192x192",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "icons/icon-512.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ],
+    "lang": "no",
+    "categories": ["food", "lifestyle", "productivity"],
+    "screenshots": [
+        {
+            "src": "icons/screenshot-1.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "label": "Hovedskjerm med oppskrifter"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Ny oppskrift",
+            "short_name": "Ny",
+            "description": "Legg til en ny oppskrift",
+            "url": "./index.html?action=new-recipe",
+            "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "Ta bilde",
+            "short_name": "Kamera",
+            "description": "Ta bilde av en oppskrift",
+            "url": "./index.html?action=camera",
+            "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+        }
+    ]
+}

@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#8B4513">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Digitaliser gamle kokebøker og oppskrifter fra bestemødre og oldemødre">
+    <title>Kokebok - Digitaliser Familiens Oppskrifter</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+    <link rel="stylesheet" href="style.css?v=1.0">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <!-- Animated background elements -->
+        <div class="login-bg-elements">
+            <div class="floating-icon" style="--delay: 0s; --x: 15%; --y: 20%;">📖</div>
+            <div class="floating-icon" style="--delay: 1s; --x: 80%; --y: 15%;">👵</div>
+            <div class="floating-icon" style="--delay: 2s; --x: 25%; --y: 75%;">🥧</div>
+            <div class="floating-icon" style="--delay: 3s; --x: 70%; --y: 80%;">🍰</div>
+            <div class="floating-icon" style="--delay: 0.5s; --x: 50%; --y: 10%;">✍️</div>
+            <div class="floating-icon" style="--delay: 1.5s; --x: 10%; --y: 50%;">🍲</div>
+            <div class="floating-icon" style="--delay: 2.5s; --x: 90%; --y: 45%;">🥮</div>
+            <div class="floating-icon" style="--delay: 3.5s; --x: 35%; --y: 90%;">📜</div>
+        </div>
+        <div class="login-content">
+            <div class="login-logo">📖</div>
+            <h1>Familiens Kokebok</h1>
+            <p class="login-subtitle">Bevar familiens oppskrifter for fremtidige generasjoner</p>
+            <p class="login-description">Digitaliser håndskrevne oppskrifter fra bestemødre og oldemødre</p>
+            <button id="googleLoginBtn" class="google-login-btn ripple">
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Logg inn med Google
+            </button>
+            <p class="login-hint">🔒 Din data er privat og sikker</p>
+            <div class="login-features">
+                <div class="feature-item">
+                    <span class="feature-icon">📸</span>
+                    <span class="feature-text">Ta bilder eller last opp</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✏️</span>
+                    <span class="feature-text">Transkriber håndskrift</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📚</span>
+                    <span class="feature-text">Organiser i kategorier</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📱</span>
+                    <span class="feature-text">Tilgjengelig overalt</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Splash Screen -->
+    <div id="splashScreen" class="splash-screen hidden">
+        <div class="splash-content">
+            <div class="splash-logo">📖</div>
+            <div class="splash-spinner"></div>
+            <p>Laster inn oppskrifter...</p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <button id="homeBtn" class="header-btn" aria-label="Hjem">📖</button>
+            <h1 id="appTitle">Familiens Kokebok</h1>
+            <button id="profileBtn" class="header-btn" aria-label="Profil">👤</button>
+            <button id="menuBtn" class="header-btn" aria-label="Meny">☰</button>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="search-container">
+            <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input type="search" id="searchInput" placeholder="Søk i oppskrifter..." autocomplete="off">
+                <button id="clearSearch" class="clear-search hidden">✕</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard View -->
+            <section id="dashboardView" class="view active">
+                <!-- Welcome Banner -->
+                <div class="welcome-banner">
+                    <div class="welcome-text">
+                        <h2>Velkommen tilbake!</h2>
+                        <p id="welcomeStats">Start med å legge til din første oppskrift</p>
+                    </div>
+                    <div class="welcome-icon">📖</div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <button id="addRecipeBtn" class="quick-action-btn primary">
+                        <span class="action-icon">➕</span>
+                        <span class="action-text">Ny Oppskrift</span>
+                    </button>
+                    <button id="addBookBtn" class="quick-action-btn secondary">
+                        <span class="action-icon">📚</span>
+                        <span class="action-text">Ny Bok</span>
+                    </button>
+                    <button id="scanBtn" class="quick-action-btn accent">
+                        <span class="action-icon">📷</span>
+                        <span class="action-text">Ta Bilde</span>
+                    </button>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-row">
+                    <div class="stat-card" id="statRecipes">
+                        <span class="stat-icon">📝</span>
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">Oppskrifter</span>
+                    </div>
+                    <div class="stat-card" id="statBooks">
+                        <span class="stat-icon">📚</span>
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">Kokebøker</span>
+                    </div>
+                    <div class="stat-card" id="statCategories">
+                        <span class="stat-icon">🏷️</span>
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">Kategorier</span>
+                    </div>
+                    <div class="stat-card" id="statImages">
+                        <span class="stat-icon">📸</span>
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">Bilder</span>
+                    </div>
+                </div>
+
+                <!-- Categories Section -->
+                <div class="section-header">
+                    <h3>📂 Kategorier</h3>
+                    <button id="manageCategoriesBtn" class="section-btn">Administrer</button>
+                </div>
+                <div id="categoriesGrid" class="categories-grid">
+                    <!-- Categories rendered here -->
+                </div>
+
+                <!-- Recent Recipes -->
+                <div class="section-header">
+                    <h3>🕐 Nylig lagt til</h3>
+                    <button id="viewAllRecipesBtn" class="section-btn">Se alle</button>
+                </div>
+                <div id="recentRecipes" class="recipes-list">
+                    <!-- Recent recipes rendered here -->
+                </div>
+
+                <!-- Books Section -->
+                <div class="section-header">
+                    <h3>📚 Mine Kokebøker</h3>
+                    <button id="viewAllBooksBtn" class="section-btn">Se alle</button>
+                </div>
+                <div id="booksGrid" class="books-grid">
+                    <!-- Books rendered here -->
+                </div>
+            </section>
+
+            <!-- Recipe List View -->
+            <section id="recipeListView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn" data-view="dashboardView">← Tilbake</button>
+                    <h2 id="recipeListTitle">Alle Oppskrifter</h2>
+                </div>
+                <div class="filter-bar">
+                    <select id="categoryFilter" class="filter-select">
+                        <option value="">Alle kategorier</option>
+                    </select>
+                    <select id="sortFilter" class="filter-select">
+                        <option value="newest">Nyeste først</option>
+                        <option value="oldest">Eldste først</option>
+                        <option value="name">Alfabetisk</option>
+                    </select>
+                </div>
+                <div id="allRecipesList" class="recipes-list full">
+                    <!-- All recipes rendered here -->
+                </div>
+            </section>
+
+            <!-- Recipe View -->
+            <section id="recipeView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn" data-view="recipeListView">← Tilbake</button>
+                    <div class="view-actions">
+                        <button id="editRecipeBtn" class="icon-btn" title="Rediger">✏️</button>
+                        <button id="shareRecipeBtn" class="icon-btn" title="Del">📤</button>
+                        <button id="deleteRecipeBtn" class="icon-btn danger" title="Slett">🗑️</button>
+                    </div>
+                </div>
+                <div id="recipeContent" class="recipe-content">
+                    <!-- Recipe content rendered here -->
+                </div>
+            </section>
+
+            <!-- Recipe Editor View -->
+            <section id="recipeEditorView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn cancel-edit">← Avbryt</button>
+                    <h2 id="editorTitle">Ny Oppskrift</h2>
+                    <button id="saveRecipeBtn" class="save-btn">Lagre</button>
+                </div>
+                <form id="recipeForm" class="recipe-form">
+                    <div class="form-group">
+                        <label for="recipeName">Oppskriftsnavn *</label>
+                        <input type="text" id="recipeName" required placeholder="F.eks. Bestemors Kjøttkaker">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="recipeCategory">Kategori</label>
+                        <select id="recipeCategory">
+                            <option value="">Velg kategori...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipeBook">Kokebok (valgfritt)</label>
+                        <select id="recipeBook">
+                            <option value="">Ingen bok valgt</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipeSource">Kilde / Fra hvem</label>
+                        <input type="text" id="recipeSource" placeholder="F.eks. Oldemor Kari, ca. 1950">
+                    </div>
+
+                    <div class="form-group">
+                        <label>📸 Original-bilder</label>
+                        <p class="form-hint">Last opp bilder av den originale håndskrevne oppskriften</p>
+                        <div id="originalImagesContainer" class="images-container">
+                            <!-- Uploaded images shown here -->
+                        </div>
+                        <div class="upload-buttons">
+                            <button type="button" id="uploadImageBtn" class="upload-btn">
+                                <span>📁</span> Last opp bilder
+                            </button>
+                            <button type="button" id="cameraBtn" class="upload-btn">
+                                <span>📷</span> Ta bilde
+                            </button>
+                        </div>
+                        <input type="file" id="imageInput" accept="image/*" multiple hidden>
+                        <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipeIngredients">Ingredienser</label>
+                        <p class="form-hint">Skriv av ingrediensene fra bildet</p>
+                        <textarea id="recipeIngredients" rows="8" placeholder="- 500g kjøttdeig&#10;- 1 løk&#10;- 2 dl melk&#10;- 1 egg&#10;..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipeInstructions">Fremgangsmåte</label>
+                        <p class="form-hint">Skriv av fremgangsmåten fra bildet</p>
+                        <textarea id="recipeInstructions" rows="12" placeholder="1. Bland kjøttdeig med hakket løk...&#10;2. Tilsett egg og melk...&#10;3. Form til kjøttkaker..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="recipeServings">Porsjoner</label>
+                            <input type="text" id="recipeServings" placeholder="F.eks. 4 personer">
+                        </div>
+                        <div class="form-group half">
+                            <label for="recipePrepTime">Tid</label>
+                            <input type="text" id="recipePrepTime" placeholder="F.eks. 45 min">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipeNotes">Notater</label>
+                        <textarea id="recipeNotes" rows="4" placeholder="Ekstra tips, varianter, minner knyttet til oppskriften..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipeTags">Emneknagger (kommaseparert)</label>
+                        <input type="text" id="recipeTags" placeholder="F.eks. julebakst, tradisjon, søtt">
+                    </div>
+                </form>
+            </section>
+
+            <!-- Book List View -->
+            <section id="bookListView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn" data-view="dashboardView">← Tilbake</button>
+                    <h2>📚 Mine Kokebøker</h2>
+                </div>
+                <div id="allBooksList" class="books-list">
+                    <!-- All books rendered here -->
+                </div>
+            </section>
+
+            <!-- Book View -->
+            <section id="bookView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn" data-view="bookListView">← Tilbake</button>
+                    <div class="view-actions">
+                        <button id="editBookBtn" class="icon-btn" title="Rediger">✏️</button>
+                        <button id="exportBookBtn" class="icon-btn" title="Eksporter">📥</button>
+                        <button id="deleteBookBtn" class="icon-btn danger" title="Slett">🗑️</button>
+                    </div>
+                </div>
+                <div id="bookContent" class="book-content">
+                    <!-- Book content rendered here -->
+                </div>
+            </section>
+
+            <!-- Book Editor View -->
+            <section id="bookEditorView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn cancel-edit">← Avbryt</button>
+                    <h2 id="bookEditorTitle">Ny Kokebok</h2>
+                    <button id="saveBookBtn" class="save-btn">Lagre</button>
+                </div>
+                <form id="bookForm" class="recipe-form">
+                    <div class="form-group">
+                        <label for="bookName">Bokens navn *</label>
+                        <input type="text" id="bookName" required placeholder="F.eks. Oldemors Kokebok">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bookDescription">Beskrivelse</label>
+                        <textarea id="bookDescription" rows="3" placeholder="Kort beskrivelse av boken og dens historie..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bookOwner">Opprinnelig eier</label>
+                        <input type="text" id="bookOwner" placeholder="F.eks. Oldemor Kari Hansen">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bookYear">År (omtrentlig)</label>
+                        <input type="text" id="bookYear" placeholder="F.eks. 1920-1950">
+                    </div>
+
+                    <div class="form-group">
+                        <label>📷 Omslagsbilde</label>
+                        <div id="bookCoverContainer" class="cover-container">
+                            <!-- Cover image shown here -->
+                        </div>
+                        <div class="upload-buttons">
+                            <button type="button" id="uploadBookCoverBtn" class="upload-btn">
+                                <span>📁</span> Last opp bilde
+                            </button>
+                            <button type="button" id="cameraBookCoverBtn" class="upload-btn">
+                                <span>📷</span> Ta bilde
+                            </button>
+                        </div>
+                        <input type="file" id="bookCoverInput" accept="image/*" hidden>
+                        <input type="file" id="bookCameraInput" accept="image/*" capture="environment" hidden>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Categories View -->
+            <section id="categoriesView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn" data-view="dashboardView">← Tilbake</button>
+                    <h2>🏷️ Kategorier</h2>
+                    <button id="addCategoryBtn" class="save-btn">+ Ny</button>
+                </div>
+                <div id="categoriesList" class="categories-list">
+                    <!-- Categories rendered here -->
+                </div>
+            </section>
+
+            <!-- Digital Book View (Book Reader) -->
+            <section id="digitalBookView" class="view hidden">
+                <div class="view-header book-reader-header">
+                    <button class="back-btn" data-view="bookView">← Tilbake</button>
+                    <h2 id="digitalBookTitle">Kokebok</h2>
+                    <div class="reader-controls">
+                        <button id="prevPageBtn" class="reader-btn">◀</button>
+                        <span id="pageIndicator">1 / 1</span>
+                        <button id="nextPageBtn" class="reader-btn">▶</button>
+                    </div>
+                </div>
+                <div id="digitalBookContent" class="digital-book-container">
+                    <!-- Digital book pages rendered here -->
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section id="settingsView" class="view hidden">
+                <div class="view-header">
+                    <button class="back-btn" data-view="dashboardView">← Tilbake</button>
+                    <h2>⚙️ Innstillinger</h2>
+                </div>
+                <div class="settings-content">
+                    <div class="settings-section">
+                        <h3>👤 Konto</h3>
+                        <div class="user-info-card">
+                            <img id="userAvatar" src="" alt="Profilbilde" class="user-avatar">
+                            <div class="user-details">
+                                <span id="userName" class="user-name"></span>
+                                <span id="userEmail" class="user-email"></span>
+                            </div>
+                        </div>
+                        <button id="logoutBtn" class="settings-btn danger">
+                            <span>🚪</span> Logg ut
+                        </button>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>🎨 Utseende</h3>
+                        <div class="setting-item">
+                            <span class="setting-label">Mørk modus</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="darkModeToggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">Skriftstørrelse</span>
+                            <select id="fontSizeSelect" class="setting-select">
+                                <option value="small">Liten</option>
+                                <option value="normal" selected>Normal</option>
+                                <option value="large">Stor</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>💾 Data</h3>
+                        <button id="exportDataBtn" class="settings-btn">
+                            <span>📥</span> Eksporter alt
+                        </button>
+                        <button id="importDataBtn" class="settings-btn">
+                            <span>📤</span> Importer data
+                        </button>
+                        <input type="file" id="importInput" accept=".json" hidden>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>ℹ️ Om</h3>
+                        <p class="app-version">Familiens Kokebok v1.0.0</p>
+                        <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-view="dashboardView">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Hjem</span>
+            </button>
+            <button class="nav-btn" data-view="recipeListView">
+                <span class="nav-icon">📝</span>
+                <span class="nav-label">Oppskrifter</span>
+            </button>
+            <button class="nav-btn add-btn" id="navAddBtn">
+                <span class="nav-icon">➕</span>
+            </button>
+            <button class="nav-btn" data-view="bookListView">
+                <span class="nav-icon">📚</span>
+                <span class="nav-label">Bøker</span>
+            </button>
+            <button class="nav-btn" data-view="settingsView">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Innstillinger</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Side Menu -->
+    <div id="sideMenu" class="side-menu hidden">
+        <div class="side-menu-overlay"></div>
+        <div class="side-menu-content">
+            <div class="side-menu-header">
+                <span class="menu-logo">📖</span>
+                <span class="menu-title">Meny</span>
+                <button id="closeMenuBtn" class="close-menu-btn">✕</button>
+            </div>
+            <nav class="side-menu-nav">
+                <button class="menu-item" data-view="dashboardView">
+                    <span>🏠</span> Hjem
+                </button>
+                <button class="menu-item" data-view="recipeListView">
+                    <span>📝</span> Alle oppskrifter
+                </button>
+                <button class="menu-item" data-view="bookListView">
+                    <span>📚</span> Kokebøker
+                </button>
+                <button class="menu-item" data-view="categoriesView">
+                    <span>🏷️</span> Kategorier
+                </button>
+                <hr class="menu-divider">
+                <button class="menu-item" data-view="settingsView">
+                    <span>⚙️</span> Innstillinger
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Modal Container -->
+    <div id="modalContainer" class="modal-container hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Modal</h3>
+                <button class="modal-close">✕</button>
+            </div>
+            <div id="modalBody" class="modal-body">
+                <!-- Modal content -->
+            </div>
+            <div id="modalFooter" class="modal-footer">
+                <!-- Modal buttons -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Viewer Modal -->
+    <div id="imageViewer" class="image-viewer hidden">
+        <div class="image-viewer-overlay"></div>
+        <div class="image-viewer-content">
+            <button class="image-viewer-close">✕</button>
+            <button class="image-viewer-prev">◀</button>
+            <img id="viewerImage" src="" alt="Forstørret bilde">
+            <button class="image-viewer-next">▶</button>
+            <div class="image-viewer-caption" id="viewerCaption"></div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js?v=1.0"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+mutation CreateCategory($name: String!) @auth(level: USER) {
+  category_insert(data: { name: $name, createdAt_expr: "request.time", userId_expr: "auth.uid" })
+}
+
+query ListPublicRecipes @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  recipes(where: { isPublic: { eq: true } }) {
+    id
+    title
+    description
+    imageUrl
+  }
+}
+
+mutation UpdateRecipe($id: UUID!, $title: String, $description: String, $imageUrl: String, $ingredients: String, $instructions: String) @auth(level: USER) {
+  recipe_update(
+    id: $id,
+    data: {
+      title: $title,
+      description: $description,
+      imageUrl: $imageUrl,
+      ingredients: $ingredients,
+      instructions: $instructions
+    }
+  )
+}
+
+query GetMyCookbooks @auth(level: USER) {
+  cookbooks(where: { userId: { eq_expr: "auth.uid" } }) {
+    id
+    name
+    description
+    author
+    publicationYear
+  }
+}
