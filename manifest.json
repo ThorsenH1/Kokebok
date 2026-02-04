@@ -2,7 +2,7 @@
     "name": "Familiens Kokebok",
     "short_name": "Kokebok",
     "description": "Digitaliser og bevar familiens oppskrifter. Med AI måltidsplanlegger, URL-import, handlemodus, oppskriftsskalerer, rester-hjelper, ernæringsoversikt og mer!",
-    "version": "3.5.0",
+    "version": "3.5.1",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#FDF5E6",

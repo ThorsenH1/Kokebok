@@ -168,6 +168,28 @@ function getCategoryIcon(categoryId) {
     return category?.icon || '📝';
 }
 
+// View a recipe by ID - used by modals and quick actions
+function viewRecipe(recipeId) {
+    const recipe = state.recipes.find(r => r.id === recipeId);
+    if (!recipe) {
+        showToast('Oppskrift ikke funnet', 'error');
+        return;
+    }
+    state.currentRecipe = recipe;
+    closeGenericModal();
+    navigateTo('recipeView');
+}
+window.viewRecipe = viewRecipe;
+
+// Close any open modal
+function closeGenericModal() {
+    const modal = $('modalContainer');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+window.closeGenericModal = closeGenericModal;
+
 // ===== Firestore Helpers =====
 function userDoc(collection) {
     if (!state.user) {
@@ -388,6 +410,7 @@ async function initApp() {
         renderDashboard();
         applySettings();
         updateUserInfo();
+        restoreMenuSectionStates();
         
         setTimeout(() => {
             if (splash) splash.classList.add('hidden');
@@ -802,6 +825,35 @@ function toggleSideMenu(show) {
     if (menu) {
         menu.classList.toggle('hidden', !show);
     }
+}
+
+// Toggle collapsible menu sections
+function toggleMenuSection(sectionId) {
+    const section = document.querySelector(`.menu-section[data-section="${sectionId}"]`);
+    if (section) {
+        section.classList.toggle('collapsed');
+        // Save state to localStorage
+        const collapsedSections = JSON.parse(localStorage.getItem('kokebok_collapsed_sections') || '[]');
+        if (section.classList.contains('collapsed')) {
+            if (!collapsedSections.includes(sectionId)) {
+                collapsedSections.push(sectionId);
+            }
+        } else {
+            const idx = collapsedSections.indexOf(sectionId);
+            if (idx > -1) collapsedSections.splice(idx, 1);
+        }
+        localStorage.setItem('kokebok_collapsed_sections', JSON.stringify(collapsedSections));
+    }
+}
+window.toggleMenuSection = toggleMenuSection;
+
+// Restore collapsed menu sections state
+function restoreMenuSectionStates() {
+    const collapsedSections = JSON.parse(localStorage.getItem('kokebok_collapsed_sections') || '[]');
+    collapsedSections.forEach(sectionId => {
+        const section = document.querySelector(`.menu-section[data-section="${sectionId}"]`);
+        if (section) section.classList.add('collapsed');
+    });
 }
 
 // ===== Dashboard =====
@@ -7125,6 +7177,10 @@ function openShoppingMode() {
 window.openShoppingMode = openShoppingMode;
 
 function categorizeShoppingItem(itemName) {
+    // Ensure itemName is a string
+    if (!itemName || typeof itemName !== 'string') {
+        return 'annet';
+    }
     const name = itemName.toLowerCase();
     
     // Frukt & Grønt

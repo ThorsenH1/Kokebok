@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=3.5">
+    <link rel="stylesheet" href="style.css?v=3.5.1">
 </head>
 <body>
     <!-- Login Screen -->
@@ -603,6 +603,7 @@
                 <button id="closeMenuBtn" class="close-menu-btn">✕</button>
             </div>
             <nav class="side-menu-nav">
+                <!-- Hovednavigasjon -->
                 <button class="menu-item" data-view="dashboardView">
                     <span>🏠</span> Hjem
                 </button>
@@ -612,112 +613,134 @@
                 <button class="menu-item" data-view="bookListView">
                     <span>📚</span> Kokebøker
                 </button>
-                <button class="menu-item" data-view="categoriesView">
-                    <span>🏷️</span> Kategorier
-                </button>
                 <button class="menu-item" id="menuFavorites">
                     <span>⭐</span> Favoritter
                 </button>
-                
-                <hr class="menu-divider">
-                <div class="menu-section-title">🍳 Matlaging</div>
-                
-                <button class="menu-item" id="menuSearchRecipes">
-                    <span>🔍</span> Finn oppskrifter
-                </button>
-                <button class="menu-item" onclick="openWhatCanIMake(); toggleSideMenu(false);">
-                    <span>🧊</span> Hva kan jeg lage?
-                </button>
-                <button class="menu-item" onclick="openQuickRecipeFromText(); toggleSideMenu(false);">
-                    <span>📝</span> Lim inn oppskrift
-                </button>
-                <button class="menu-item" onclick="openUrlImport(); toggleSideMenu(false);">
-                    <span>🔗</span> Importer fra URL
-                    <span class="menu-badge new">Ny!</span>
+                <button class="menu-item" id="menuShoppingList">
+                    <span>🛒</span> Handleliste
                 </button>
                 <button class="menu-item" id="menuMealPlanner">
                     <span>📅</span> Ukemeny
                 </button>
-                <button class="menu-item" onclick="openAiMealPlanner(); toggleSideMenu(false);">
-                    <span>🤖</span> AI Ukemenyplanlegger
-                    <span class="menu-badge premium">Premium</span>
-                </button>
-                <button class="menu-item" onclick="openMealPrepAssistant(); toggleSideMenu(false);">
-                    <span>🥡</span> Meal Prep
-                </button>
                 
                 <hr class="menu-divider">
-                <div class="menu-section-title">🛒 Handle</div>
                 
-                <button class="menu-item" id="menuShoppingList">
-                    <span>🛒</span> Handleliste
-                </button>
-                <button class="menu-item" onclick="openShoppingMode(); toggleSideMenu(false);">
-                    <span>🏪</span> Handlemodus
-                    <span class="menu-badge premium">Premium</span>
-                </button>
-                <button class="menu-item" onclick="quickAddToShopping(); toggleSideMenu(false);">
-                    <span>⚡</span> Hurtig-legg til
-                </button>
-                <button class="menu-item" onclick="optimizeGroceryList(); toggleSideMenu(false);">
-                    <span>🗂️</span> Smart handleliste
-                </button>
-                <button class="menu-item" onclick="findNearestStores(); toggleSideMenu(false);">
-                    <span>📍</span> Finn butikker
-                </button>
-                <button class="menu-item" onclick="openBudgetPlanner(); toggleSideMenu(false);">
-                    <span>💵</span> Ukesbudsjett
-                </button>
+                <!-- Matlaging - sammenleggbar -->
+                <div class="menu-section collapsible" data-section="cooking">
+                    <div class="menu-section-header" onclick="toggleMenuSection('cooking')">
+                        <span class="menu-section-title">🍳 Matlaging</span>
+                        <span class="menu-section-arrow">▼</span>
+                    </div>
+                    <div class="menu-section-content">
+                        <button class="menu-item" id="menuSearchRecipes">
+                            <span>🔍</span> Finn oppskrifter
+                        </button>
+                        <button class="menu-item" onclick="openWhatCanIMake(); toggleSideMenu(false);">
+                            <span>🧊</span> Hva kan jeg lage?
+                        </button>
+                        <button class="menu-item" onclick="openQuickRecipeFromText(); toggleSideMenu(false);">
+                            <span>📝</span> Lim inn oppskrift
+                        </button>
+                        <button class="menu-item" onclick="openUrlImport(); toggleSideMenu(false);">
+                            <span>🔗</span> Importer fra URL
+                        </button>
+                        <button class="menu-item" onclick="openAiMealPlanner(); toggleSideMenu(false);">
+                            <span>🤖</span> AI Måltidsplan
+                            <span class="menu-badge premium">AI</span>
+                        </button>
+                        <button class="menu-item" onclick="openMealPrepAssistant(); toggleSideMenu(false);">
+                            <span>🥡</span> Meal Prep
+                        </button>
+                        <button class="menu-item" onclick="showRecipeOfTheDay(); toggleSideMenu(false);">
+                            <span>🎲</span> Dagens oppskrift
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Handle - sammenleggbar -->
+                <div class="menu-section collapsible" data-section="shopping">
+                    <div class="menu-section-header" onclick="toggleMenuSection('shopping')">
+                        <span class="menu-section-title">🛒 Handle</span>
+                        <span class="menu-section-arrow">▼</span>
+                    </div>
+                    <div class="menu-section-content">
+                        <button class="menu-item" onclick="openShoppingMode(); toggleSideMenu(false);">
+                            <span>🏪</span> Handlemodus
+                        </button>
+                        <button class="menu-item" onclick="quickAddToShopping(); toggleSideMenu(false);">
+                            <span>⚡</span> Hurtig-legg til
+                        </button>
+                        <button class="menu-item" onclick="optimizeGroceryList(); toggleSideMenu(false);">
+                            <span>🗂️</span> Smart handleliste
+                        </button>
+                        <button class="menu-item" onclick="openBudgetPlanner(); toggleSideMenu(false);">
+                            <span>💵</span> Ukesbudsjett
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Verktøy - sammenleggbar -->
+                <div class="menu-section collapsible" data-section="tools">
+                    <div class="menu-section-header" onclick="toggleMenuSection('tools')">
+                        <span class="menu-section-title">🔧 Verktøy</span>
+                        <span class="menu-section-arrow">▼</span>
+                    </div>
+                    <div class="menu-section-content">
+                        <button class="menu-item" onclick="openMeasurementCalculator(); toggleSideMenu(false);">
+                            <span>📐</span> Mål og vekt
+                        </button>
+                        <button class="menu-item" onclick="openRecipeScaler(); toggleSideMenu(false);">
+                            <span>⚖️</span> Skalér oppskrift
+                        </button>
+                        <button class="menu-item" onclick="openLeftoverSuggester(); toggleSideMenu(false);">
+                            <span>🥡</span> Rester-hjelper
+                        </button>
+                        <button class="menu-item" id="menuTimer">
+                            <span>⏱️</span> Koketimer
+                        </button>
+                        <button class="menu-item" onclick="openCookingDiary(); toggleSideMenu(false);">
+                            <span>📅</span> Matkalender
+                        </button>
+                        <button class="menu-item" onclick="openNutritionTracker(); toggleSideMenu(false);">
+                            <span>🥗</span> Ernæring
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Statistikk - sammenleggbar -->
+                <div class="menu-section collapsible" data-section="stats">
+                    <div class="menu-section-header" onclick="toggleMenuSection('stats')">
+                        <span class="menu-section-title">📊 Statistikk</span>
+                        <span class="menu-section-arrow">▼</span>
+                    </div>
+                    <div class="menu-section-content">
+                        <button class="menu-item" onclick="showTopRatedRecipes(); toggleSideMenu(false);">
+                            <span>⭐</span> Toppratede
+                        </button>
+                        <button class="menu-item" onclick="showCookbookStats(); toggleSideMenu(false);">
+                            <span>📊</span> Statistikk
+                        </button>
+                        <button class="menu-item" onclick="showCookingHistory(); toggleSideMenu(false);">
+                            <span>📖</span> Kokehistorikk
+                        </button>
+                        <button class="menu-item" onclick="showAchievements(); toggleSideMenu(false);">
+                            <span>🏆</span> Prestasjoner
+                        </button>
+                    </div>
+                </div>
                 
                 <hr class="menu-divider">
-                <div class="menu-section-title">📊 Verktøy</div>
                 
-                <button class="menu-item" onclick="openMeasurementCalculator(); toggleSideMenu(false);">
-                    <span>📐</span> Mål og vekt-kalkulator
-                    <span class="menu-badge new">Ny!</span>
-                </button>
-                <button class="menu-item" onclick="openRecipeScaler(); toggleSideMenu(false);">
-                    <span>⚖️</span> Oppskriftsskalerer
-                    <span class="menu-badge premium">Premium</span>
-                </button>
-                <button class="menu-item" onclick="openLeftoverSuggester(); toggleSideMenu(false);">
-                    <span>🥡</span> Rester-hjelper
-                    <span class="menu-badge premium">Premium</span>
-                </button>
-                <button class="menu-item" onclick="showRecipeOfTheDay(); toggleSideMenu(false);">
-                    <span>🎲</span> Dagens oppskrift
-                </button>
-                <button class="menu-item" onclick="openCookingDiary(); toggleSideMenu(false);">
-                    <span>📅</span> Matkalender
-                    <span class="menu-badge new">Ny!</span>
-                </button>
-                <button class="menu-item" onclick="openNutritionTracker(); toggleSideMenu(false);">
-                    <span>🥗</span> Ernæringsoversikt
-                    <span class="menu-badge premium">Premium</span>
-                </button>
-                <button class="menu-item" id="menuTimer">
-                    <span>⏱️</span> Koketimer
+                <!-- Innstillinger -->
+                <button class="menu-item" data-view="categoriesView">
+                    <span>🏷️</span> Kategorier
                 </button>
                 <button class="menu-item" onclick="showAllergyFilter(); toggleSideMenu(false);">
                     <span>🚫</span> Allergi-filter
                 </button>
                 <button class="menu-item" onclick="showHouseholdSelector(); toggleSideMenu(false);">
-                    <span>🏠</span> Velg husstand
+                    <span>👥</span> Husstand
                 </button>
-                <button class="menu-item" onclick="showTopRatedRecipes(); toggleSideMenu(false);">
-                    <span>⭐</span> Toppratede
-                </button>
-                <button class="menu-item" onclick="showCookbookStats(); toggleSideMenu(false);">
-                    <span>📊</span> Statistikk
-                </button>
-                <button class="menu-item" onclick="showCookingHistory(); toggleSideMenu(false);">
-                    <span>📖</span> Kokehistorikk
-                </button>
-                <button class="menu-item" onclick="showAchievements(); toggleSideMenu(false);">
-                    <span>🏆</span> Prestasjoner
-                </button>
-                
-                <hr class="menu-divider">
                 <button class="menu-item" id="menuLanguage">
                     <span>🌍</span> Språk
                 </button>
@@ -1050,6 +1073,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js?v=3.2"></script>
-    <script src="app.js?v=3.5"></script>
+    <script src="app.js?v=3.5.1"></script>
 </body>
 </html>
