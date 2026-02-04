@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="stylesheet" href="style.css?v=1.2">
 </head>
 <body>
     <!-- Login Screen -->
@@ -261,13 +261,23 @@
 
                     <div class="form-group">
                         <label for="recipeIngredients">Ingredienser</label>
-                        <p class="form-hint">Skriv av ingrediensene fra bildet</p>
+                        <div class="form-hint-row">
+                            <p class="form-hint">Skriv av ingrediensene fra bildet</p>
+                            <button type="button" id="scanIngredientsBtn" class="mini-scan-btn" title="Skann med AI">
+                                🤖 Skann
+                            </button>
+                        </div>
                         <textarea id="recipeIngredients" rows="8" placeholder="- 500g kjøttdeig&#10;- 1 løk&#10;- 2 dl melk&#10;- 1 egg&#10;..."></textarea>
                     </div>
 
                     <div class="form-group">
                         <label for="recipeInstructions">Fremgangsmåte</label>
-                        <p class="form-hint">Skriv av fremgangsmåten fra bildet</p>
+                        <div class="form-hint-row">
+                            <p class="form-hint">Skriv av fremgangsmåten fra bildet</p>
+                            <button type="button" id="scanInstructionsBtn" class="mini-scan-btn" title="Skann med AI">
+                                🤖 Skann
+                            </button>
+                        </div>
                         <textarea id="recipeInstructions" rows="12" placeholder="1. Bland kjøttdeig med hakket løk...&#10;2. Tilsett egg og melk...&#10;3. Form til kjøttkaker..."></textarea>
                     </div>
 
@@ -448,8 +458,9 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v1.0.0</p>
+                        <p class="app-version">Familiens Kokebok v2.0.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
+                        <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">Med AI-drevet tekstgjenkjenning</p>
                     </div>
                 </div>
             </section>
@@ -541,11 +552,111 @@
         </div>
     </div>
 
+    <!-- AI Scanner Modal -->
+    <div id="aiScannerModal" class="ai-scanner-modal hidden">
+        <div class="ai-scanner-overlay"></div>
+        <div class="ai-scanner-content">
+            <div class="ai-scanner-header">
+                <h3>🤖 AI Oppskriftsleser</h3>
+                <button id="closeScannerBtn" class="scanner-close-btn">✕</button>
+            </div>
+            <div class="ai-scanner-body">
+                <!-- Step 1: Upload -->
+                <div id="scanStep1" class="scan-step active">
+                    <div class="scan-upload-area" id="scanDropZone">
+                        <div class="scan-upload-icon">📷</div>
+                        <h4>Last opp bilde av oppskriften</h4>
+                        <p>Dra og slipp, eller klikk for å velge</p>
+                        <div class="scan-upload-buttons">
+                            <button id="scanUploadBtn" class="scan-btn primary">
+                                <span>📁</span> Velg fil
+                            </button>
+                            <button id="scanCameraBtn" class="scan-btn secondary">
+                                <span>📷</span> Ta bilde
+                            </button>
+                        </div>
+                        <input type="file" id="scanFileInput" accept="image/*" hidden>
+                        <input type="file" id="scanCameraInput" accept="image/*" capture="environment" hidden>
+                    </div>
+                    <div id="scanPreview" class="scan-preview hidden">
+                        <img id="scanPreviewImage" src="" alt="Forhåndsvisning">
+                        <button id="removeScanImage" class="remove-scan-btn">🗑️ Fjern</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Processing -->
+                <div id="scanStep2" class="scan-step">
+                    <div class="scan-processing">
+                        <div class="scan-loader">
+                            <div class="scan-loader-ring"></div>
+                            <div class="scan-loader-icon">🔍</div>
+                        </div>
+                        <h4 id="scanStatusText">Analyserer bildet...</h4>
+                        <div class="scan-progress-bar">
+                            <div id="scanProgressFill" class="scan-progress-fill"></div>
+                        </div>
+                        <p id="scanProgressText" class="scan-progress-text">0%</p>
+                    </div>
+                </div>
+
+                <!-- Step 3: Results -->
+                <div id="scanStep3" class="scan-step">
+                    <div class="scan-results">
+                        <div class="scan-results-header">
+                            <span class="scan-success-icon">✨</span>
+                            <h4>Tekst funnet!</h4>
+                            <p>Rediger teksten før du fortsetter</p>
+                        </div>
+                        <div class="scan-text-container">
+                            <textarea id="scannedText" rows="12" placeholder="Skannet tekst vises her..."></textarea>
+                        </div>
+                        <div class="scan-actions">
+                            <button id="scanAgainBtn" class="scan-btn secondary">
+                                <span>🔄</span> Skann på nytt
+                            </button>
+                            <button id="useScannedTextBtn" class="scan-btn primary">
+                                <span>✅</span> Bruk teksten
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Recipe Choice Modal -->
+    <div id="addRecipeChoiceModal" class="choice-modal hidden">
+        <div class="choice-modal-overlay"></div>
+        <div class="choice-modal-content">
+            <h3>🍽️ Legg til oppskrift</h3>
+            <p>Hvordan vil du legge til oppskriften?</p>
+            <div class="choice-options">
+                <button id="choiceManual" class="choice-btn">
+                    <span class="choice-icon">✏️</span>
+                    <span class="choice-title">Skriv manuelt</span>
+                    <span class="choice-desc">Skriv inn oppskriften selv</span>
+                </button>
+                <button id="choiceScan" class="choice-btn featured">
+                    <span class="choice-badge">AI</span>
+                    <span class="choice-icon">📷</span>
+                    <span class="choice-title">Skann med AI</span>
+                    <span class="choice-desc">Ta bilde og la AI lese teksten</span>
+                </button>
+            </div>
+            <button id="closeChoiceModal" class="choice-cancel">Avbryt</button>
+        </div>
+    </div>
+
+    <!-- Confetti Canvas -->
+    <canvas id="confettiCanvas" class="confetti-canvas"></canvas>
+
     <!-- Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-config.js?v=1.1"></script>
-    <script src="app.js?v=1.1"></script>
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="firebase-config.js?v=1.2"></script>
+    <script src="app.js?v=1.2"></script>
 </body>
 </html>

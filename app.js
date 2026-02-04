@@ -1,15 +1,20 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v1.0
+// FAMILIENS KOKEBOK APP v2.0
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
+// Med AI-drevet OCR for tekstgjenkjenning
 // ==========================================
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '2.0.0';
 
 // ===== Firebase Initialization =====
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+// ===== OCR State =====
+let ocrWorker = null;
+let currentScanTarget = null; // 'ingredients' | 'instructions' | 'full'
 
 // ===== Default Categories =====
 const DEFAULT_CATEGORIES = [
@@ -447,10 +452,13 @@ function setupEventListeners() {
         });
     });
     
-    // Quick actions
-    on('addRecipeBtn', 'click', () => openRecipeEditor());
+    // Quick actions - bruk showAddRecipeChoice for bedre brukeropplevelse
+    on('addRecipeBtn', 'click', () => showAddRecipeChoice());
     on('addBookBtn', 'click', () => openBookEditor());
-    on('scanBtn', 'click', () => openCameraForRecipe());
+    on('scanBtn', 'click', () => {
+        currentScanTarget = 'full';
+        openAIScanner();
+    });
     on('navAddBtn', 'click', () => showAddMenu());
     
     // Dashboard buttons
@@ -1902,31 +1910,414 @@ function closeModal() {
 }
 
 function showAddMenu() {
-    const modalTitle = $('modalTitle');
-    const modalBody = $('modalBody');
-    const modalFooter = $('modalFooter');
+    // Vis det nye valgmenyen i stedet for modal
+    showAddRecipeChoice();
+}
+
+// ===== ADD RECIPE CHOICE MODAL =====
+function showAddRecipeChoice() {
+    const modal = $('addRecipeChoiceModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        
+        // Setup event handlers
+        const choiceManual = $('choiceManual');
+        const choiceScan = $('choiceScan');
+        const closeBtn = $('closeChoiceModal');
+        const overlay = modal.querySelector('.choice-modal-overlay');
+        
+        const closeChoice = () => modal.classList.add('hidden');
+        
+        if (choiceManual) {
+            choiceManual.onclick = () => {
+                closeChoice();
+                openRecipeEditor();
+            };
+        }
+        
+        if (choiceScan) {
+            choiceScan.onclick = () => {
+                closeChoice();
+                currentScanTarget = 'full';
+                openAIScanner();
+            };
+        }
+        
+        if (closeBtn) closeBtn.onclick = closeChoice;
+        if (overlay) overlay.onclick = closeChoice;
+    }
+}
+
+// ===== AI SCANNER FUNCTIONS =====
+function openAIScanner() {
+    const modal = $('aiScannerModal');
+    if (!modal) return;
     
-    modalTitle.textContent = 'Legg til';
-    modalBody.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-            <button class="settings-btn" id="addMenuRecipe">
-                <span>📝</span> Ny oppskrift
-            </button>
-            <button class="settings-btn" id="addMenuBook">
-                <span>📚</span> Ny kokebok
-            </button>
-            <button class="settings-btn" id="addMenuCamera">
-                <span>📷</span> Ta bilde av oppskrift
-            </button>
-        </div>
-    `;
-    modalFooter.innerHTML = '';
+    modal.classList.remove('hidden');
+    showScanStep(1);
     
-    on('addMenuRecipe', 'click', () => { closeModal(); openRecipeEditor(); });
-    on('addMenuBook', 'click', () => { closeModal(); openBookEditor(); });
-    on('addMenuCamera', 'click', () => { closeModal(); openCameraForRecipe(); });
+    // Reset state
+    const preview = $('scanPreview');
+    const previewImg = $('scanPreviewImage');
+    if (preview) preview.classList.add('hidden');
+    if (previewImg) previewImg.src = '';
     
-    $('modalContainer').classList.remove('hidden');
+    setupScannerEvents();
+}
+
+function closeAIScanner() {
+    const modal = $('aiScannerModal');
+    if (modal) modal.classList.add('hidden');
+    currentScanTarget = null;
+}
+
+function showScanStep(step) {
+    ['scanStep1', 'scanStep2', 'scanStep3'].forEach((id, i) => {
+        const el = $(id);
+        if (el) {
+            el.classList.toggle('active', i + 1 === step);
+        }
+    });
+}
+
+function setupScannerEvents() {
+    const closeBtn = $('closeScannerBtn');
+    const overlay = document.querySelector('.ai-scanner-overlay');
+    const uploadBtn = $('scanUploadBtn');
+    const cameraBtn = $('scanCameraBtn');
+    const fileInput = $('scanFileInput');
+    const cameraInput = $('scanCameraInput');
+    const dropZone = $('scanDropZone');
+    const removeBtn = $('removeScanImage');
+    const scanAgainBtn = $('scanAgainBtn');
+    const useTextBtn = $('useScannedTextBtn');
+    
+    // Close handlers
+    if (closeBtn) closeBtn.onclick = closeAIScanner;
+    if (overlay) overlay.onclick = closeAIScanner;
+    
+    // Upload handlers
+    if (uploadBtn) uploadBtn.onclick = (e) => {
+        e.stopPropagation();
+        fileInput?.click();
+    };
+    if (cameraBtn) cameraBtn.onclick = (e) => {
+        e.stopPropagation();
+        cameraInput?.click();
+    };
+    
+    // File input handlers
+    if (fileInput) fileInput.onchange = handleScanFileSelect;
+    if (cameraInput) cameraInput.onchange = handleScanFileSelect;
+    
+    // Drag and drop
+    if (dropZone) {
+        dropZone.onclick = () => fileInput?.click();
+        
+        dropZone.ondragover = (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        };
+        
+        dropZone.ondragleave = () => {
+            dropZone.classList.remove('drag-over');
+        };
+        
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleScanFile(files[0]);
+            }
+        };
+    }
+    
+    // Remove image
+    if (removeBtn) removeBtn.onclick = () => {
+        const preview = $('scanPreview');
+        const previewImg = $('scanPreviewImage');
+        if (preview) preview.classList.add('hidden');
+        if (previewImg) previewImg.src = '';
+    };
+    
+    // Scan again
+    if (scanAgainBtn) scanAgainBtn.onclick = () => {
+        showScanStep(1);
+        const preview = $('scanPreview');
+        if (preview) preview.classList.add('hidden');
+    };
+    
+    // Use scanned text
+    if (useTextBtn) useTextBtn.onclick = useScannedText;
+}
+
+function handleScanFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) {
+        handleScanFile(file);
+    }
+}
+
+async function handleScanFile(file) {
+    if (!file.type.startsWith('image/')) {
+        showToast('Vennligst velg et bilde', 'error');
+        return;
+    }
+    
+    try {
+        // Show preview
+        const preview = $('scanPreview');
+        const previewImg = $('scanPreviewImage');
+        
+        const base64 = await fileToBase64(file);
+        if (previewImg) previewImg.src = base64;
+        if (preview) preview.classList.remove('hidden');
+        
+        // Wait a bit then start OCR
+        setTimeout(() => startOCR(base64), 500);
+        
+    } catch (error) {
+        console.error('Error handling file:', error);
+        showToast('Kunne ikke lese bildet', 'error');
+    }
+}
+
+async function startOCR(imageData) {
+    showScanStep(2);
+    
+    const statusText = $('scanStatusText');
+    const progressFill = $('scanProgressFill');
+    const progressText = $('scanProgressText');
+    
+    const updateProgress = (status, progress) => {
+        if (statusText) statusText.textContent = status;
+        if (progressFill) progressFill.style.width = `${progress}%`;
+        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+    };
+    
+    updateProgress('Forbereder...', 5);
+    
+    try {
+        // Use Tesseract.js for OCR
+        if (typeof Tesseract === 'undefined') {
+            throw new Error('Tesseract ikke lastet');
+        }
+        
+        updateProgress('Laster språkdata (norsk)...', 15);
+        
+        const result = await Tesseract.recognize(
+            imageData,
+            'nor+eng', // Norwegian + English
+            {
+                logger: (m) => {
+                    if (m.status === 'recognizing text') {
+                        const progress = 15 + (m.progress * 80);
+                        updateProgress('Leser tekst...', progress);
+                    }
+                }
+            }
+        );
+        
+        updateProgress('Ferdig!', 100);
+        
+        // Show results
+        setTimeout(() => {
+            showScanStep(3);
+            const textArea = $('scannedText');
+            if (textArea) {
+                textArea.value = result.data.text || '';
+            }
+            
+            // Celebration effect
+            triggerConfetti();
+            
+        }, 300);
+        
+    } catch (error) {
+        console.error('OCR Error:', error);
+        showToast('Kunne ikke lese teksten. Prøv med et tydeligere bilde.', 'error');
+        showScanStep(1);
+    }
+}
+
+function useScannedText() {
+    const textArea = $('scannedText');
+    const scannedText = textArea?.value || '';
+    
+    if (!scannedText.trim()) {
+        showToast('Ingen tekst å bruke', 'warning');
+        return;
+    }
+    
+    closeAIScanner();
+    
+    if (currentScanTarget === 'ingredients') {
+        const ingredientsField = $('recipeIngredients');
+        if (ingredientsField) {
+            ingredientsField.value = scannedText;
+            ingredientsField.focus();
+        }
+        showToast('Ingredienser lagt til!', 'success');
+        
+    } else if (currentScanTarget === 'instructions') {
+        const instructionsField = $('recipeInstructions');
+        if (instructionsField) {
+            instructionsField.value = scannedText;
+            instructionsField.focus();
+        }
+        showToast('Fremgangsmåte lagt til!', 'success');
+        
+    } else {
+        // Full recipe - open editor with text
+        openRecipeEditorWithScannedText(scannedText);
+    }
+    
+    currentScanTarget = null;
+}
+
+function openRecipeEditorWithScannedText(text) {
+    // Open editor
+    state.editingRecipe = null;
+    state.tempImages = [];
+    
+    navigateTo('recipeEditorView');
+    
+    const editorTitle = $('editorTitle');
+    if (editorTitle) editorTitle.textContent = 'Ny Oppskrift (fra skanning)';
+    
+    // Clear form
+    const form = $('recipeForm');
+    if (form) form.reset();
+    
+    // Parse the scanned text intelligently
+    const parsed = parseScannedRecipe(text);
+    
+    // Fill in fields
+    if (parsed.name && $('recipeName')) {
+        $('recipeName').value = parsed.name;
+    }
+    if (parsed.ingredients && $('recipeIngredients')) {
+        $('recipeIngredients').value = parsed.ingredients;
+    }
+    if (parsed.instructions && $('recipeInstructions')) {
+        $('recipeInstructions').value = parsed.instructions;
+    }
+    
+    showToast('Oppskrift skannet! Sjekk og rediger om nødvendig.', 'success');
+}
+
+function parseScannedRecipe(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    
+    let name = '';
+    let ingredients = [];
+    let instructions = [];
+    let currentSection = 'unknown';
+    
+    for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+        
+        // Detect section headers
+        if (lowerLine.includes('ingrediens') || lowerLine.includes('du trenger')) {
+            currentSection = 'ingredients';
+            continue;
+        }
+        if (lowerLine.includes('fremgangsmåte') || lowerLine.includes('slik gjør du') || 
+            lowerLine.includes('tilberedning') || lowerLine.includes('gjør slik')) {
+            currentSection = 'instructions';
+            continue;
+        }
+        
+        // Try to detect recipe name (usually first non-empty line)
+        if (!name && lines.indexOf(line) < 3 && line.length < 60 && 
+            !line.startsWith('-') && !line.match(/^\d/)) {
+            name = line;
+            continue;
+        }
+        
+        // Add to appropriate section
+        if (currentSection === 'ingredients' || line.startsWith('-') || line.match(/^\d+\s*(g|dl|ts|ss|stk)/i)) {
+            ingredients.push(line);
+            currentSection = 'ingredients';
+        } else if (currentSection === 'instructions' || line.match(/^\d+\./)) {
+            instructions.push(line);
+            currentSection = 'instructions';
+        } else if (currentSection === 'unknown') {
+            // Guess based on content
+            if (line.match(/^\d+\s*(g|dl|ml|ts|ss|stk|kg)/i) || line.startsWith('-')) {
+                ingredients.push(line);
+            } else {
+                instructions.push(line);
+            }
+        }
+    }
+    
+    return {
+        name: name,
+        ingredients: ingredients.join('\n'),
+        instructions: instructions.join('\n')
+    };
+}
+
+// ===== CONFETTI EFFECT =====
+function triggerConfetti() {
+    const canvas = $('confettiCanvas');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    const particles = [];
+    const colors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3'];
+    
+    // Create particles
+    for (let i = 0; i < 150; i++) {
+        particles.push({
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            vx: (Math.random() - 0.5) * 20,
+            vy: (Math.random() - 0.5) * 20 - 10,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: Math.random() * 10 + 5,
+            rotation: Math.random() * 360,
+            rotationSpeed: (Math.random() - 0.5) * 10
+        });
+    }
+    
+    let frame = 0;
+    const maxFrames = 120;
+    
+    function animate() {
+        if (frame >= maxFrames) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.5; // Gravity
+            p.rotation += p.rotationSpeed;
+            p.vx *= 0.99; // Air resistance
+            
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate((p.rotation * Math.PI) / 180);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = 1 - (frame / maxFrames);
+            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+            ctx.restore();
+        });
+        
+        frame++;
+        requestAnimationFrame(animate);
+    }
+    
+    animate();
 }
 
 // ===== Toast =====
@@ -1950,9 +2341,13 @@ function showToast(message, type = 'info') {
     
     container.appendChild(toast);
     
+    // Success celebration
+    if (type === 'success') {
+        toast.classList.add('success-pulse');
+    }
+    
     setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(20px)';
+        toast.classList.add('removing');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
@@ -1960,7 +2355,21 @@ function showToast(message, type = 'info') {
 // ===== Initialize =====
 document.addEventListener('DOMContentLoaded', () => {
     setupAuth();
+    setupScanButtons();
 });
+
+// Setup scan buttons in recipe editor
+function setupScanButtons() {
+    on('scanIngredientsBtn', 'click', () => {
+        currentScanTarget = 'ingredients';
+        openAIScanner();
+    });
+    
+    on('scanInstructionsBtn', 'click', () => {
+        currentScanTarget = 'instructions';
+        openAIScanner();
+    });
+}
 
 // Make functions available globally for onclick handlers
 window.openRecipeEditor = openRecipeEditor;
