@@ -2,7 +2,7 @@
     "name": "Familiens Kokebok",
     "short_name": "Kokebok",
     "description": "Digitaliser og bevar familiens oppskrifter. Med måltidsplanlegger, handleliste, kokemodus og mer!",
-    "version": "3.1.0",
+    "version": "3.2.0",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#FDF5E6",

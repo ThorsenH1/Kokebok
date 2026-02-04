@@ -1,11 +1,11 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v3.0
+// FAMILIENS KOKEBOK APP v3.2
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
 // 100% privat - ingen AI lærer av dine oppskrifter
 // ==========================================
 
-const APP_VERSION = '3.1.0';
+const APP_VERSION = '3.2.0';
 
 // ===== Firebase Initialization =====
 firebase.initializeApp(firebaseConfig);
@@ -20,6 +20,67 @@ let timerLabel = '';
 
 // ===== Language State =====
 let currentLanguage = localStorage.getItem('kokebok_language') || 'no';
+let searchLanguage = localStorage.getItem('kokebok_search_language') || 'no';
+
+// ===== Translation Cache =====
+const translationCache = {};
+
+// ===== Norwegian Translation Dictionary (common cooking terms) =====
+const norwegianTranslations = {
+    // Measurements
+    'cup': 'kopp', 'cups': 'kopper', 'tablespoon': 'ss', 'tablespoons': 'ss',
+    'teaspoon': 'ts', 'teaspoons': 'ts', 'tbsp': 'ss', 'tsp': 'ts',
+    'pound': 'pund', 'pounds': 'pund', 'ounce': 'unse', 'ounces': 'unser',
+    'lb': 'pund', 'oz': 'unse', 'clove': 'fedd', 'cloves': 'fedd',
+    'pinch': 'klype', 'handful': 'håndfull', 'slice': 'skive', 'slices': 'skiver',
+    
+    // Proteins
+    'chicken': 'kylling', 'beef': 'biff', 'pork': 'svinekjøtt', 'lamb': 'lam',
+    'fish': 'fisk', 'salmon': 'laks', 'cod': 'torsk', 'shrimp': 'reker',
+    'bacon': 'bacon', 'sausage': 'pølse', 'mince': 'kjøttdeig', 'ground': 'kjøttdeig',
+    'turkey': 'kalkun', 'duck': 'and', 'ham': 'skinke', 'egg': 'egg', 'eggs': 'egg',
+    
+    // Vegetables
+    'onion': 'løk', 'onions': 'løk', 'garlic': 'hvitløk', 'tomato': 'tomat', 'tomatoes': 'tomater',
+    'potato': 'potet', 'potatoes': 'poteter', 'carrot': 'gulrot', 'carrots': 'gulrøtter',
+    'pepper': 'paprika', 'peppers': 'paprika', 'mushroom': 'sopp', 'mushrooms': 'sopp',
+    'celery': 'selleri', 'broccoli': 'brokkoli', 'spinach': 'spinat', 'lettuce': 'salat',
+    'cucumber': 'agurk', 'zucchini': 'squash', 'cabbage': 'kål', 'beans': 'bønner',
+    'peas': 'erter', 'corn': 'mais', 'leek': 'purre', 'leeks': 'purre',
+    
+    // Dairy & Basics
+    'butter': 'smør', 'milk': 'melk', 'cream': 'fløte', 'cheese': 'ost',
+    'flour': 'mel', 'sugar': 'sukker', 'salt': 'salt', 'oil': 'olje',
+    'olive oil': 'olivenolje', 'vegetable oil': 'matolje', 'water': 'vann',
+    'stock': 'buljong', 'broth': 'kraft', 'wine': 'vin', 'vinegar': 'eddik',
+    
+    // Herbs & Spices
+    'parsley': 'persille', 'basil': 'basilikum', 'oregano': 'oregano',
+    'thyme': 'timian', 'rosemary': 'rosmarin', 'cilantro': 'koriander',
+    'dill': 'dill', 'mint': 'mynte', 'bay leaf': 'laurbærblad',
+    'cinnamon': 'kanel', 'cumin': 'spisskummen', 'paprika': 'paprika',
+    'ginger': 'ingefær', 'nutmeg': 'muskatnøtt', 'cayenne': 'kajennepepper',
+    
+    // Cooking methods
+    'bake': 'stek i ovn', 'boil': 'kok', 'fry': 'stek', 'grill': 'grill',
+    'roast': 'ovnsstek', 'simmer': 'la småkoke', 'sauté': 'surr', 'stir': 'rør',
+    'mix': 'bland', 'chop': 'hakk', 'slice': 'skjær', 'dice': 'terning',
+    'mince': 'finhakk', 'peel': 'skrell', 'drain': 'hell av', 'season': 'krydre',
+    'preheat': 'forvarm', 'serve': 'server', 'add': 'tilsett', 'remove': 'fjern',
+    'cover': 'dekk til', 'heat': 'varm opp', 'cook': 'kok/stek', 'brown': 'bryn',
+    
+    // Common phrases
+    'to taste': 'etter smak', 'as needed': 'etter behov', 'optional': 'valgfritt',
+    'freshly ground': 'nymalt', 'finely chopped': 'finhakket', 'minced': 'finhakket',
+    'degrees': 'grader', 'minutes': 'minutter', 'hours': 'timer', 'until': 'til',
+    
+    // Categories
+    'Dessert': 'Dessert', 'Seafood': 'Sjømat', 'Chicken': 'Kylling',
+    'Beef': 'Biff', 'Pasta': 'Pasta', 'Vegetarian': 'Vegetar',
+    'Breakfast': 'Frokost', 'Side': 'Tilbehør', 'Lamb': 'Lam',
+    'Pork': 'Svinekjøtt', 'Miscellaneous': 'Diverse', 'Starter': 'Forrett',
+    'Vegan': 'Vegansk', 'Goat': 'Geit'
+};
 
 // ===== Default Categories =====
 const DEFAULT_CATEGORIES = [
@@ -47,7 +108,10 @@ const state = {
     books: [],
     settings: {
         darkMode: false,
-        fontSize: 'normal'
+        fontSize: 'normal',
+        searchLanguage: 'no',
+        timerNotifications: true,
+        mealReminders: false
     },
     currentView: 'dashboardView',
     currentRecipe: null,
@@ -64,9 +128,14 @@ const state = {
     currentPageIndex: 0,
     // New v3.0 state
     favorites: [],
-    mealPlan: {},
+    mealPlan: {},           // { dateKey: { name, ingredients[], isExternal } }
     shoppingList: [],
-    currentWeekOffset: 0
+    currentWeekOffset: 0,
+    // Meal planner picker state
+    pickerDate: null,
+    pickerTab: 'mine',
+    // Saved external recipes (from API)
+    savedExternalRecipes: []
 };
 
 // ===== DOM Helpers =====
@@ -403,6 +472,24 @@ function applySettings() {
     
     const fontSelect = $('fontSizeSelect');
     if (fontSelect) fontSelect.value = state.settings.fontSize;
+    
+    // Search language
+    const searchLangSelect = $('searchLanguageSelect');
+    if (searchLangSelect) {
+        searchLangSelect.value = state.settings.searchLanguage || 'no';
+    }
+    
+    // Timer notifications
+    const timerNotifToggle = $('timerNotificationsToggle');
+    if (timerNotifToggle) {
+        timerNotifToggle.checked = state.settings.timerNotifications !== false;
+    }
+    
+    // Meal reminders
+    const mealReminderToggle = $('mealReminderToggle');
+    if (mealReminderToggle) {
+        mealReminderToggle.checked = state.settings.mealReminders || false;
+    }
 }
 
 function updateUserInfo() {
@@ -583,6 +670,29 @@ function setupEventListeners() {
         saveSettings();
     });
     
+    // Search language setting
+    on('searchLanguageSelect', 'change', (e) => {
+        state.settings.searchLanguage = e.target.value;
+        localStorage.setItem('kokebok_search_language', e.target.value);
+        saveSettings();
+        showToast(`Søkespråk endret til ${e.target.value === 'no' ? 'Norsk' : e.target.value.toUpperCase()}`, 'success');
+    });
+    
+    // Timer notifications
+    on('timerNotificationsToggle', 'change', (e) => {
+        state.settings.timerNotifications = e.target.checked;
+        saveSettings();
+    });
+    
+    // Meal reminders
+    on('mealReminderToggle', 'change', (e) => {
+        state.settings.mealReminders = e.target.checked;
+        saveSettings();
+        if (e.target.checked) {
+            requestNotificationPermission();
+        }
+    });
+    
     on('logoutBtn', 'click', () => {
         showConfirmModal('Logg ut', 'Er du sikker på at du vil logge ut?', doSignOut);
     });
@@ -600,6 +710,29 @@ function setupEventListeners() {
         on(modalOverlay, 'click', closeModal);
     }
     on(document.querySelector('.modal-close'), 'click', closeModal);
+}
+
+// Request notification permission
+async function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            showToast('Varsler aktivert!', 'success');
+        }
+    }
+}
+
+// Debounce helper
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // ===== Navigation =====
@@ -1938,13 +2071,76 @@ function showAddMenu() {
 
 // ===== V3.0 NEW FEATURES =====
 
+// ===== NORWEGIAN TO ENGLISH TRANSLATION FOR SEARCH =====
+const norwegianToEnglish = {
+    // Common Norwegian food terms
+    'kylling': 'chicken', 'biff': 'beef', 'svinekjøtt': 'pork', 'lam': 'lamb',
+    'fisk': 'fish', 'laks': 'salmon', 'torsk': 'cod', 'reker': 'shrimp',
+    'pasta': 'pasta', 'ris': 'rice', 'nudler': 'noodles', 'pizza': 'pizza',
+    'suppe': 'soup', 'salat': 'salad', 'gryte': 'stew', 'pai': 'pie',
+    'kake': 'cake', 'dessert': 'dessert', 'is': 'ice cream', 'pudding': 'pudding',
+    'banan': 'banana', 'eple': 'apple', 'appelsin': 'orange', 'sitron': 'lemon',
+    'tomat': 'tomato', 'potet': 'potato', 'gulrot': 'carrot', 'løk': 'onion',
+    'hvitløk': 'garlic', 'sopp': 'mushroom', 'paprika': 'pepper',
+    'ost': 'cheese', 'egg': 'egg', 'smør': 'butter', 'melk': 'milk',
+    'brød': 'bread', 'pannekake': 'pancake', 'vaffel': 'waffle',
+    'frokost': 'breakfast', 'middag': 'dinner', 'lunsj': 'lunch',
+    'vegetar': 'vegetarian', 'vegan': 'vegan', 'sunn': 'healthy',
+    'enkel': 'easy', 'rask': 'quick', 'italiensk': 'italian', 'meksikansk': 'mexican',
+    'indisk': 'indian', 'thai': 'thai', 'kinesisk': 'chinese', 'japansk': 'japanese',
+    'burger': 'burger', 'taco': 'taco', 'wrap': 'wrap', 'sandwich': 'sandwich',
+    'lasagne': 'lasagne', 'carbonara': 'carbonara', 'bolognese': 'bolognese',
+    'curry': 'curry', 'wok': 'stir fry', 'grillet': 'grilled', 'stekt': 'fried',
+    'bakt': 'baked', 'kokt': 'boiled'
+};
+
+function translateToEnglish(query) {
+    let translated = query.toLowerCase();
+    
+    // Check for direct translation
+    if (norwegianToEnglish[translated]) {
+        return norwegianToEnglish[translated];
+    }
+    
+    // Check for partial matches
+    for (const [no, en] of Object.entries(norwegianToEnglish)) {
+        if (translated.includes(no)) {
+            translated = translated.replace(no, en);
+        }
+    }
+    
+    return translated;
+}
+
+function translateToNorwegian(text) {
+    if (!text) return text;
+    
+    let result = text;
+    
+    // Replace words with Norwegian translations
+    for (const [en, no] of Object.entries(norwegianTranslations)) {
+        // Case insensitive replace with word boundaries
+        const regex = new RegExp(`\\b${en}\\b`, 'gi');
+        result = result.replace(regex, no);
+    }
+    
+    return result;
+}
+
 // ===== RECIPE SEARCH (TheMealDB API) =====
 async function openRecipeSearch() {
     const modal = $('recipeSearchModal');
     if (modal) {
         modal.classList.remove('hidden');
         const searchInput = $('recipeSearchInput');
-        if (searchInput) searchInput.focus();
+        if (searchInput) {
+            searchInput.focus();
+            // Update placeholder based on language setting
+            const lang = state.settings.searchLanguage || 'no';
+            searchInput.placeholder = lang === 'no' 
+                ? 'Søk etter oppskrift (f.eks. "lasagne", "kylling")...'
+                : 'Search for recipes (e.g. "lasagna", "chicken")...';
+        }
         
         // Setup events
         setupRecipeSearchEvents();
@@ -1978,7 +2174,64 @@ function setupRecipeSearchEvents() {
 async function performRecipeSearch() {
     const searchInput = $('recipeSearchInput');
     const resultsContainer = $('searchResults');
-    const query = searchInput?.value?.trim();
+    let query = searchInput?.value?.trim();
+    
+    if (!query) {
+        showToast('Skriv inn et søkeord', 'warning');
+        return;
+    }
+    
+    // Translate Norwegian to English if using Norwegian search
+    const lang = state.settings.searchLanguage || 'no';
+    let searchQuery = query;
+    if (lang === 'no') {
+        searchQuery = translateToEnglish(query);
+        console.log(`Translated "${query}" to "${searchQuery}"`);
+    }
+    
+    // Show loading
+    resultsContainer.innerHTML = `
+        <div class="search-loading">
+            <div class="spinner"></div>
+            <p>Søker etter "${escapeHtml(query)}"...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(searchQuery)}`);
+        const data = await response.json();
+        
+        if (data.meals && data.meals.length > 0) {
+            renderSearchResults(data.meals, lang === 'no');
+        } else {
+            // Try original query if translation didn't work
+            if (searchQuery !== query) {
+                const response2 = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`);
+                const data2 = await response2.json();
+                if (data2.meals && data2.meals.length > 0) {
+                    renderSearchResults(data2.meals, lang === 'no');
+                    return;
+                }
+            }
+            
+            resultsContainer.innerHTML = `
+                <div class="search-placeholder">
+                    <span>🤷</span>
+                    <p>Ingen oppskrifter funnet for "${escapeHtml(query)}"</p>
+                    <p class="hint">Tips: Prøv å søke på engelsk (f.eks. "chicken curry", "chocolate cake")</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+        resultsContainer.innerHTML = `
+            <div class="search-placeholder">
+                <span>❌</span>
+                <p>Kunne ikke søke. Sjekk internettforbindelsen.</p>
+            </div>
+        `;
+    }
+}
     
     if (!query) {
         showToast('Skriv inn et søkeord', 'warning');
@@ -2023,14 +2276,17 @@ async function performCategorySearch() {
     const categoryFilter = $('searchCategoryFilter');
     const resultsContainer = $('searchResults');
     const category = categoryFilter?.value;
+    const lang = state.settings.searchLanguage || 'no';
     
     if (!category) return;
+    
+    const categoryName = norwegianTranslations[category] || category;
     
     // Show loading
     resultsContainer.innerHTML = `
         <div class="search-loading">
             <div class="spinner"></div>
-            <p>Henter ${category}-oppskrifter...</p>
+            <p>Henter ${categoryName}-oppskrifter...</p>
         </div>
     `;
     
@@ -2039,14 +2295,14 @@ async function performCategorySearch() {
         const data = await response.json();
         
         if (data.meals && data.meals.length > 0) {
-            // Get full details for first 10 meals
+            // Get full details for first 12 meals
             const detailedMeals = [];
-            for (const meal of data.meals.slice(0, 10)) {
+            for (const meal of data.meals.slice(0, 12)) {
                 const detailRes = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`);
                 const detailData = await detailRes.json();
                 if (detailData.meals) detailedMeals.push(detailData.meals[0]);
             }
-            renderSearchResults(detailedMeals);
+            renderSearchResults(detailedMeals, lang === 'no');
         } else {
             resultsContainer.innerHTML = `
                 <div class="search-placeholder">
@@ -2066,19 +2322,29 @@ async function performCategorySearch() {
     }
 }
 
-function renderSearchResults(meals) {
+function renderSearchResults(meals, translateToNo = false) {
     const resultsContainer = $('searchResults');
     
-    resultsContainer.innerHTML = meals.map(meal => `
-        <div class="search-result-card" data-meal-id="${meal.idMeal}">
-            <img src="${meal.strMealThumb}/preview" class="search-result-image" alt="${escapeHtml(meal.strMeal)}">
-            <div class="search-result-info">
-                <h4>${escapeHtml(meal.strMeal)}</h4>
-                <p>${meal.strArea || 'Internasjonal'} • ${meal.strCategory || ''}</p>
-                <span class="search-result-tag">🌍 TheMealDB</span>
+    resultsContainer.innerHTML = meals.map(meal => {
+        // Translate category and area if Norwegian mode
+        const category = translateToNo 
+            ? (norwegianTranslations[meal.strCategory] || meal.strCategory)
+            : meal.strCategory;
+        const area = translateToNo 
+            ? (norwegianTranslations[meal.strArea] || meal.strArea || 'Internasjonal')
+            : (meal.strArea || 'International');
+        
+        return `
+            <div class="search-result-card" data-meal-id="${meal.idMeal}">
+                <img src="${meal.strMealThumb}/preview" class="search-result-image" alt="${escapeHtml(meal.strMeal)}" loading="lazy">
+                <div class="search-result-info">
+                    <h4>${escapeHtml(meal.strMeal)}</h4>
+                    <p>${area} • ${category || ''}</p>
+                    <span class="search-result-tag">🌍 TheMealDB</span>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
     
     // Add click handlers
     resultsContainer.querySelectorAll('.search-result-card').forEach(card => {
@@ -2090,6 +2356,8 @@ async function showQuickRecipe(mealId) {
     try {
         const response = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealId}`);
         const data = await response.json();
+        const lang = state.settings.searchLanguage || 'no';
+        const translateToNo = lang === 'no';
         
         if (data.meals && data.meals[0]) {
             const meal = data.meals[0];
@@ -2100,9 +2368,28 @@ async function showQuickRecipe(mealId) {
                 const ingredient = meal[`strIngredient${i}`];
                 const measure = meal[`strMeasure${i}`];
                 if (ingredient && ingredient.trim()) {
-                    ingredients.push(`${measure?.trim() || ''} ${ingredient.trim()}`.trim());
+                    let ingText = `${measure?.trim() || ''} ${ingredient.trim()}`.trim();
+                    // Translate ingredient to Norwegian if enabled
+                    if (translateToNo) {
+                        ingText = translateToNorwegian(ingText);
+                    }
+                    ingredients.push(ingText);
                 }
             }
+            
+            // Translate instructions if Norwegian
+            let instructions = meal.strInstructions;
+            if (translateToNo) {
+                instructions = translateToNorwegian(instructions);
+            }
+            
+            // Translate category and area
+            const category = translateToNo 
+                ? (norwegianTranslations[meal.strCategory] || meal.strCategory)
+                : meal.strCategory;
+            const area = translateToNo 
+                ? (norwegianTranslations[meal.strArea] || meal.strArea || 'Internasjonal')
+                : (meal.strArea || 'International');
             
             // Show quick recipe modal
             const modal = $('quickRecipeModal');
@@ -2113,41 +2400,48 @@ async function showQuickRecipe(mealId) {
                     <img src="${meal.strMealThumb}" class="quick-recipe-image" alt="${escapeHtml(meal.strMeal)}">
                     <h3 style="font-size: 1.3rem; margin-bottom: 12px;">${escapeHtml(meal.strMeal)}</h3>
                     <div class="quick-recipe-meta">
-                        <span>🌍 ${meal.strArea || 'Internasjonal'}</span>
-                        <span>📂 ${meal.strCategory || ''}</span>
+                        <span>🌍 ${area}</span>
+                        <span>📂 ${category || ''}</span>
                         ${meal.strTags ? `<span>🏷️ ${meal.strTags}</span>` : ''}
                     </div>
                     
                     <div class="quick-recipe-section">
-                        <h4>🥄 Ingredienser (${ingredients.length})</h4>
+                        <h4>🥄 ${translateToNo ? 'Ingredienser' : 'Ingredients'} (${ingredients.length})</h4>
                         <ul>
                             ${ingredients.map(ing => `<li>${escapeHtml(ing)}</li>`).join('')}
                         </ul>
                     </div>
                     
                     <div class="quick-recipe-section">
-                        <h4>👩‍🍳 Fremgangsmåte</h4>
-                        <p style="white-space: pre-line; line-height: 1.7;">${escapeHtml(meal.strInstructions)}</p>
+                        <h4>👩‍🍳 ${translateToNo ? 'Fremgangsmåte' : 'Instructions'}</h4>
+                        <p style="white-space: pre-line; line-height: 1.7;">${escapeHtml(instructions)}</p>
                     </div>
                     
                     ${meal.strYoutube ? `
                         <div class="quick-recipe-section">
                             <h4>📺 Video</h4>
                             <a href="${meal.strYoutube}" target="_blank" class="action-btn secondary" style="margin-top: 8px;">
-                                Se på YouTube →
+                                ${translateToNo ? 'Se på YouTube →' : 'Watch on YouTube →'}
                             </a>
                         </div>
                     ` : ''}
                     
                     <div class="quick-recipe-actions">
                         <button class="action-btn primary" onclick="saveExternalRecipe('${mealId}')">
-                            💾 Lagre i min kokebok
+                            💾 ${translateToNo ? 'Lagre i min kokebok' : 'Save to my cookbook'}
                         </button>
-                        <button class="action-btn secondary" onclick="addToMealPlanFromSearch('${escapeHtml(meal.strMeal).replace(/'/g, "\\'")}')">
-                            📅 Legg til i ukemeny
+                        <button class="action-btn secondary" onclick="addExternalToMealPlan('${mealId}')">
+                            📅 ${translateToNo ? 'Legg til i ukemeny' : 'Add to meal plan'}
                         </button>
                     </div>
                 `;
+                
+                // Store for meal plan
+                window.currentQuickRecipeData = {
+                    mealId,
+                    name: meal.strMeal,
+                    ingredients: ingredients
+                };
                 
                 modal.classList.remove('hidden');
                 
@@ -2164,6 +2458,16 @@ async function showQuickRecipe(mealId) {
         showToast('Kunne ikke laste oppskriften', 'error');
     }
 }
+
+// Add external recipe to meal plan with ingredients
+function addExternalToMealPlan(mealId) {
+    const data = window.currentQuickRecipeData;
+    if (data && data.ingredients) {
+        addToMealPlanFromSearch(data.name, data.ingredients);
+        $('quickRecipeModal')?.classList.add('hidden');
+    }
+}
+window.addExternalToMealPlan = addExternalToMealPlan;
 
 async function saveExternalRecipe(mealId) {
     try {
@@ -2247,6 +2551,7 @@ function renderMealPlannerWeek() {
     if (!grid) return;
     
     const days = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+    const daysFull = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
     const today = new Date();
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay() + 1 + (state.currentWeekOffset * 7));
@@ -2261,55 +2566,224 @@ function renderMealPlannerWeek() {
         const date = new Date(startOfWeek);
         date.setDate(startOfWeek.getDate() + i);
         const dateKey = date.toISOString().split('T')[0];
-        const meal = state.mealPlan[dateKey];
+        const mealData = state.mealPlan[dateKey];
+        const mealName = mealData?.name || mealData; // Support old format (string) and new format (object)
+        const isToday = date.toDateString() === today.toDateString();
         
         return `
-            <div class="meal-day" data-date="${dateKey}">
+            <div class="meal-day ${isToday ? 'today' : ''}" data-date="${dateKey}">
                 <div class="meal-day-header">${day}</div>
                 <div class="meal-day-date">${date.getDate()}.${date.getMonth() + 1}</div>
-                <div class="meal-slot ${meal ? 'filled' : ''}" data-date="${dateKey}">
-                    ${meal ? escapeHtml(meal) : '+ Legg til'}
+                <div class="meal-slot ${mealName ? 'filled' : ''}" data-date="${dateKey}" data-day="${daysFull[i]}">
+                    ${mealName ? `
+                        <span class="meal-name">${escapeHtml(typeof mealName === 'string' ? mealName : mealName)}</span>
+                        <button class="meal-remove-btn" data-date="${dateKey}" title="Fjern">✕</button>
+                    ` : '<span class="meal-add">+ Legg til</span>'}
                 </div>
             </div>
         `;
     }).join('');
     
-    // Add click handlers
+    // Add click handlers for adding meals
     grid.querySelectorAll('.meal-slot').forEach(slot => {
-        slot.onclick = () => selectMealForDate(slot.dataset.date);
+        slot.onclick = (e) => {
+            // Don't trigger if clicking remove button
+            if (e.target.classList.contains('meal-remove-btn')) return;
+            openRecipePicker(slot.dataset.date, slot.dataset.day);
+        };
+    });
+    
+    // Add click handlers for removing meals
+    grid.querySelectorAll('.meal-remove-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const dateKey = btn.dataset.date;
+            delete state.mealPlan[dateKey];
+            saveMealPlan();
+            renderMealPlannerWeek();
+            updatePlannedMealsCount();
+            showToast('Måltid fjernet', 'success');
+        };
     });
 }
 
-function selectMealForDate(dateKey) {
-    // Show recipe selection
-    const recipes = state.recipes.map(r => r.name);
+// ===== RECIPE PICKER (for Meal Planner) =====
+function openRecipePicker(dateKey, dayName) {
+    state.pickerDate = dateKey;
+    const modal = $('recipePickerModal');
+    const dateLabel = $('pickerDateLabel');
     
-    if (recipes.length === 0) {
-        showToast('Du har ingen oppskrifter å velge fra', 'warning');
-        return;
-    }
+    if (dateLabel) dateLabel.textContent = `Velg for ${dayName}`;
     
-    const selected = prompt('Velg oppskrift for denne dagen:\n\n' + recipes.map((r, i) => `${i + 1}. ${r}`).join('\n') + '\n\nSkriv nummer eller oppskriftsnavn:');
-    
-    if (selected) {
-        let mealName = selected;
-        const num = parseInt(selected);
-        if (!isNaN(num) && num > 0 && num <= recipes.length) {
-            mealName = recipes[num - 1];
-        }
-        
-        state.mealPlan[dateKey] = mealName;
-        saveMealPlan();
-        renderMealPlannerWeek();
-        updatePlannedMealsCount();
-        showToast(`${mealName} lagt til!`, 'success');
+    if (modal) {
+        modal.classList.remove('hidden');
+        state.pickerTab = 'mine';
+        setupRecipePickerEvents();
+        renderRecipePicker();
     }
 }
 
-function addToMealPlanFromSearch(recipeName) {
+function closeRecipePicker() {
+    const modal = $('recipePickerModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function setupRecipePickerEvents() {
+    const closeBtn = $('closeRecipePickerBtn');
+    const overlay = document.querySelector('#recipePickerModal .feature-modal-overlay');
+    const searchInput = $('pickerSearchInput');
+    const categoryFilter = $('pickerCategoryFilter');
+    const quickInput = $('quickMealInput');
+    const quickConfirmBtn = $('quickMealConfirmBtn');
+    
+    if (closeBtn) closeBtn.onclick = closeRecipePicker;
+    if (overlay) overlay.onclick = closeRecipePicker;
+    
+    // Tab switching
+    document.querySelectorAll('.picker-tab').forEach(tab => {
+        tab.onclick = () => {
+            document.querySelectorAll('.picker-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            state.pickerTab = tab.dataset.tab;
+            renderRecipePicker();
+        };
+    });
+    
+    // Search and filter
+    if (searchInput) {
+        searchInput.oninput = debounce(() => renderRecipePicker(), 200);
+    }
+    if (categoryFilter) {
+        // Populate categories
+        categoryFilter.innerHTML = '<option value="">Alle kategorier</option>' +
+            state.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        categoryFilter.onchange = () => renderRecipePicker();
+    }
+    
+    // Quick input
+    if (quickConfirmBtn) {
+        quickConfirmBtn.onclick = () => {
+            const mealName = quickInput?.value?.trim();
+            if (mealName) {
+                addMealToPlan(state.pickerDate, mealName, []);
+                quickInput.value = '';
+            }
+        };
+    }
+    if (quickInput) {
+        quickInput.onkeypress = (e) => {
+            if (e.key === 'Enter') quickConfirmBtn?.click();
+        };
+    }
+}
+
+function renderRecipePicker() {
+    const container = $('pickerRecipesList');
+    const quickInputContainer = $('pickerQuickInput');
+    const searchInput = $('pickerSearchInput');
+    const categoryFilter = $('pickerCategoryFilter');
+    
+    if (!container) return;
+    
+    const query = searchInput?.value?.toLowerCase() || '';
+    const category = categoryFilter?.value || '';
+    
+    // Show/hide quick input based on tab
+    if (quickInputContainer) {
+        quickInputContainer.classList.toggle('hidden', state.pickerTab !== 'quick');
+    }
+    
+    if (state.pickerTab === 'quick') {
+        container.innerHTML = `
+            <div class="picker-placeholder">
+                <span>✏️</span>
+                <p>Skriv inn et måltid manuelt</p>
+                <p class="hint">F.eks. "Pizza", "Restemat", "Bestemors lapskaus"</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Get recipes to display
+    let recipes = [];
+    
+    if (state.pickerTab === 'mine') {
+        recipes = state.recipes.filter(r => {
+            const matchesQuery = !query || r.name.toLowerCase().includes(query);
+            const matchesCategory = !category || r.category === category;
+            return matchesQuery && matchesCategory;
+        });
+    } else if (state.pickerTab === 'saved') {
+        recipes = state.savedExternalRecipes.filter(r => {
+            return !query || r.name.toLowerCase().includes(query);
+        });
+    }
+    
+    if (recipes.length === 0) {
+        container.innerHTML = `
+            <div class="picker-placeholder">
+                <span>${state.pickerTab === 'mine' ? '📝' : '💾'}</span>
+                <p>${state.pickerTab === 'mine' ? 'Ingen oppskrifter funnet' : 'Ingen lagrede oppskrifter fra søk'}</p>
+                ${state.pickerTab === 'mine' ? '<p class="hint">Legg til oppskrifter først, eller bruk "Skriv inn"</p>' : ''}
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = recipes.map(recipe => `
+        <div class="picker-recipe-card" data-recipe-id="${recipe.id || ''}">
+            <div class="picker-recipe-thumb">
+                ${recipe.images?.[0] ? `<img src="${recipe.images[0]}" alt="">` : '<span>🍽️</span>'}
+            </div>
+            <div class="picker-recipe-info">
+                <h4>${escapeHtml(recipe.name)}</h4>
+                <p>${recipe.category ? getCategoryName(recipe.category) : 'Ingen kategori'}</p>
+            </div>
+            <button class="picker-select-btn">Velg</button>
+        </div>
+    `).join('');
+    
+    // Add click handlers
+    container.querySelectorAll('.picker-recipe-card').forEach(card => {
+        const selectBtn = card.querySelector('.picker-select-btn');
+        if (selectBtn) {
+            selectBtn.onclick = () => {
+                const recipeId = card.dataset.recipeId;
+                const recipe = state.pickerTab === 'mine' 
+                    ? state.recipes.find(r => r.id === recipeId)
+                    : state.savedExternalRecipes.find(r => r.id === recipeId);
+                
+                if (recipe) {
+                    const ingredients = recipe.ingredients ? recipe.ingredients.split('\n').filter(i => i.trim()) : [];
+                    addMealToPlan(state.pickerDate, recipe.name, ingredients);
+                }
+            };
+        }
+    });
+}
+
+function addMealToPlan(dateKey, mealName, ingredients = []) {
+    // Store meal with ingredients for shopping list
+    state.mealPlan[dateKey] = {
+        name: mealName,
+        ingredients: ingredients
+    };
+    
+    saveMealPlan();
+    closeRecipePicker();
+    renderMealPlannerWeek();
+    updatePlannedMealsCount();
+    showToast(`${mealName} lagt til!`, 'success');
+    checkAchievements();
+}
+
+function addToMealPlanFromSearch(recipeName, ingredients = []) {
     const today = new Date();
     const dateKey = today.toISOString().split('T')[0];
-    state.mealPlan[dateKey] = recipeName;
+    state.mealPlan[dateKey] = {
+        name: recipeName,
+        ingredients: ingredients
+    };
     saveMealPlan();
     updatePlannedMealsCount();
     showToast(`${recipeName} lagt til i dagens meny!`, 'success');
@@ -2344,25 +2818,69 @@ function clearCurrentWeekPlan() {
 function generateShoppingListFromPlan() {
     const ingredients = new Set();
     
-    Object.values(state.mealPlan).forEach(mealName => {
-        const recipe = state.recipes.find(r => r.name === mealName);
-        if (recipe && recipe.ingredients) {
-            recipe.ingredients.split('\n').forEach(ing => {
-                if (ing.trim()) ingredients.add(ing.trim());
+    // Get dates for current week
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1 + (state.currentWeekOffset * 7));
+    
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
+        const dateKey = date.toISOString().split('T')[0];
+        const mealData = state.mealPlan[dateKey];
+        
+        if (!mealData) continue;
+        
+        // Handle both old format (string) and new format (object with ingredients)
+        if (typeof mealData === 'object' && mealData.ingredients) {
+            // New format: ingredients are stored with meal
+            mealData.ingredients.forEach(ing => {
+                if (ing && ing.trim()) ingredients.add(ing.trim());
             });
+        } else {
+            // Old format or manual entry: look up recipe by name
+            const mealName = typeof mealData === 'string' ? mealData : mealData.name;
+            const recipe = state.recipes.find(r => r.name === mealName);
+            if (recipe && recipe.ingredients) {
+                recipe.ingredients.split('\n').forEach(ing => {
+                    if (ing.trim()) ingredients.add(ing.trim());
+                });
+            }
         }
-    });
+    }
     
     if (ingredients.size === 0) {
-        showToast('Ingen ingredienser å legge til', 'warning');
+        showToast('Ingen ingredienser funnet. Legg til oppskrifter med ingredienser i ukemenyen.', 'warning');
         return;
     }
     
-    state.shoppingList = [...ingredients].map(ing => ({ text: ing, checked: false }));
+    // Add new ingredients to existing list (don't replace)
+    const existingTexts = state.shoppingList.map(item => item.text.toLowerCase());
+    const newItems = [...ingredients]
+        .filter(ing => !existingTexts.includes(ing.toLowerCase()))
+        .map(ing => ({ text: ing, checked: false, category: categorizeIngredient(ing) }));
+    
+    state.shoppingList = [...state.shoppingList, ...newItems];
     saveShoppingList();
     closeMealPlanner();
     openShoppingList();
-    showToast(`${ingredients.size} ingredienser lagt til handlelisten!`, 'success');
+    showToast(`${newItems.length} nye ingredienser lagt til! (${state.shoppingList.length} totalt)`, 'success');
+}
+
+// Kategorisere ingredienser for bedre sortering
+function categorizeIngredient(ingredient) {
+    const ing = ingredient.toLowerCase();
+    
+    if (/melk|ost|rømme|yoghurt|fløte|smør|egg/i.test(ing)) return 'meieri';
+    if (/brød|mel|pasta|ris|nudler|havre/i.test(ing)) return 'bakevarer';
+    if (/kylling|kjøtt|fisk|laks|torsk|bacon|pølse|skinke/i.test(ing)) return 'kjøtt';
+    if (/løk|hvitløk|tomat|gulrot|potet|brokkoli|salat|agurk|paprika|sopp/i.test(ing)) return 'grønnsaker';
+    if (/eple|banan|appelsin|sitron|bær/i.test(ing)) return 'frukt';
+    if (/salt|pepper|krydder|kanel|oregano|basilikum/i.test(ing)) return 'krydder';
+    if (/sukker|honning|sjokolade|kakao/i.test(ing)) return 'søtt';
+    if (/olje|eddik|saus|ketsjup|sennep/i.test(ing)) return 'sauser';
+    
+    return 'annet';
 }
 
 // ===== SHOPPING LIST =====
@@ -2392,11 +2910,43 @@ function setupShoppingListEvents() {
     if (addItemBtn) addItemBtn.onclick = addShoppingItem;
     if (clearCheckedBtn) clearCheckedBtn.onclick = clearCheckedItems;
     if (shareListBtn) shareListBtn.onclick = shareShoppingList;
+    
+    // Sort buttons
+    document.querySelectorAll('.sort-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            sortShoppingList(btn.dataset.sort);
+        };
+    });
+}
+
+function sortShoppingList(sortType) {
+    switch (sortType) {
+        case 'alpha':
+            state.shoppingList.sort((a, b) => a.text.localeCompare(b.text, 'no'));
+            break;
+        case 'category':
+            state.shoppingList.sort((a, b) => (a.category || 'annet').localeCompare(b.category || 'annet', 'no'));
+            break;
+        case 'added':
+        default:
+            // Keep original order
+            break;
+    }
+    renderShoppingList();
+    saveShoppingList();
 }
 
 function renderShoppingList() {
     const container = $('shoppingListItems');
+    const statsEl = $('shoppingListStats');
     if (!container) return;
+    
+    // Update stats
+    const total = state.shoppingList.length;
+    const checked = state.shoppingList.filter(i => i.checked).length;
+    if (statsEl) statsEl.textContent = `${total} varer • ${checked} kjøpt`;
     
     if (state.shoppingList.length === 0) {
         container.innerHTML = `
@@ -3476,11 +4026,354 @@ function setupKeyboardShortcuts() {
             closeMealPlanner();
             closeShoppingList();
             closeTimer();
+            closeRecipePicker();
             closeNutritionEstimator();
             if (window.exitCookingMode) window.exitCookingMode();
         }
     });
 }
+
+// ===== COOKBOOK STATISTICS =====
+function getCookbookStats() {
+    const stats = {
+        totalRecipes: state.recipes.length,
+        totalBooks: state.books.length,
+        categories: {},
+        favoriteCount: state.favorites.length,
+        mealsPlanned: Object.keys(state.mealPlan).length,
+        shoppingItems: state.shoppingList.length,
+        achievementsUnlocked: JSON.parse(localStorage.getItem('kokebok_achievements') || '[]').length,
+        totalAchievements: Object.keys(achievements).length
+    };
+    
+    // Count recipes per category
+    state.recipes.forEach(recipe => {
+        const cat = recipe.category || 'annet';
+        stats.categories[cat] = (stats.categories[cat] || 0) + 1;
+    });
+    
+    return stats;
+}
+
+function showCookbookStats() {
+    const stats = getCookbookStats();
+    const categoryList = Object.entries(stats.categories)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, count]) => `<li>${getCategoryName(cat)}: ${count} oppskrifter</li>`)
+        .join('');
+    
+    const html = `
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-icon">📝</span>
+                <span class="stat-value">${stats.totalRecipes}</span>
+                <span class="stat-label">Oppskrifter</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">📚</span>
+                <span class="stat-value">${stats.totalBooks}</span>
+                <span class="stat-label">Kokebøker</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">⭐</span>
+                <span class="stat-value">${stats.favoriteCount}</span>
+                <span class="stat-label">Favoritter</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">🏆</span>
+                <span class="stat-value">${stats.achievementsUnlocked}/${stats.totalAchievements}</span>
+                <span class="stat-label">Prestasjoner</span>
+            </div>
+        </div>
+        ${categoryList ? `
+            <h4 style="margin: 20px 0 12px;">Oppskrifter per kategori</h4>
+            <ul class="stats-category-list">${categoryList}</ul>
+        ` : ''}
+    `;
+    
+    showModal('📊 Din kokebok i tall', html, []);
+}
+window.showCookbookStats = showCookbookStats;
+
+// ===== ALLERGY FILTER =====
+const commonAllergens = {
+    gluten: ['mel', 'hvete', 'bygg', 'rug', 'havre', 'pasta', 'brød', 'wheat', 'flour', 'bread'],
+    dairy: ['melk', 'fløte', 'ost', 'smør', 'rømme', 'yoghurt', 'milk', 'cream', 'cheese', 'butter'],
+    eggs: ['egg', 'eggehvite', 'eggeplomme', 'eggs'],
+    nuts: ['mandel', 'hasselnøtt', 'valnøtt', 'cashew', 'pistasjnøtt', 'peanøtt', 'almond', 'walnut', 'peanut', 'nuts'],
+    shellfish: ['reker', 'hummer', 'krabbe', 'skjell', 'blåskjell', 'shrimp', 'lobster', 'crab'],
+    fish: ['fisk', 'laks', 'torsk', 'sei', 'makrell', 'fish', 'salmon', 'cod'],
+    soy: ['soya', 'tofu', 'soy', 'soybean']
+};
+
+function filterRecipesByAllergens(allergens) {
+    return state.recipes.filter(recipe => {
+        const ingredients = (recipe.ingredients || '').toLowerCase();
+        
+        for (const allergen of allergens) {
+            const keywords = commonAllergens[allergen] || [];
+            for (const keyword of keywords) {
+                if (ingredients.includes(keyword)) {
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    });
+}
+
+function showAllergyFilter() {
+    const html = `
+        <p>Velg allergener å filtrere bort:</p>
+        <div class="allergen-checkboxes">
+            ${Object.keys(commonAllergens).map(allergen => `
+                <label class="allergen-label">
+                    <input type="checkbox" value="${allergen}" class="allergen-checkbox">
+                    <span>${getAllergenName(allergen)}</span>
+                </label>
+            `).join('')}
+        </div>
+        <button id="applyAllergyFilter" class="action-btn primary" style="margin-top: 16px; width: 100%;">
+            🔍 Filtrer oppskrifter
+        </button>
+    `;
+    
+    showModal('🚫 Allergi-filter', html, []);
+    
+    setTimeout(() => {
+        const btn = $('applyAllergyFilter');
+        if (btn) {
+            btn.onclick = () => {
+                const checked = Array.from(document.querySelectorAll('.allergen-checkbox:checked'))
+                    .map(cb => cb.value);
+                
+                if (checked.length === 0) {
+                    showToast('Velg minst én allergen', 'warning');
+                    return;
+                }
+                
+                const safeRecipes = filterRecipesByAllergens(checked);
+                closeModal();
+                showFilteredRecipes(safeRecipes, `Oppskrifter uten ${checked.map(getAllergenName).join(', ')}`);
+            };
+        }
+    }, 100);
+}
+
+function getAllergenName(allergen) {
+    const names = {
+        gluten: '🌾 Gluten',
+        dairy: '🥛 Meieri',
+        eggs: '🥚 Egg',
+        nuts: '🥜 Nøtter',
+        shellfish: '🦐 Skalldyr',
+        fish: '🐟 Fisk',
+        soy: '🫘 Soya'
+    };
+    return names[allergen] || allergen;
+}
+
+function showFilteredRecipes(recipes, title) {
+    if (recipes.length === 0) {
+        showToast('Ingen oppskrifter matcher filteret', 'warning');
+        return;
+    }
+    
+    state.filteredRecipes = recipes;
+    
+    const html = `
+        <p>${recipes.length} oppskrifter funnet</p>
+        <div class="filtered-recipes-list">
+            ${recipes.map(r => `
+                <div class="filtered-recipe-item" data-id="${r.id}">
+                    <span class="filtered-recipe-icon">${r.images?.[0] ? '🍽️' : '📝'}</span>
+                    <span class="filtered-recipe-name">${escapeHtml(r.name)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    showModal(title, html, []);
+    
+    setTimeout(() => {
+        document.querySelectorAll('.filtered-recipe-item').forEach(item => {
+            item.onclick = () => {
+                const recipe = state.recipes.find(r => r.id === item.dataset.id);
+                if (recipe) {
+                    closeModal();
+                    viewRecipe(recipe);
+                }
+            };
+        });
+    }, 100);
+}
+window.showAllergyFilter = showAllergyFilter;
+
+// ===== WEEKLY MEAL SUGGESTIONS =====
+function getWeeklySuggestions() {
+    if (state.recipes.length < 7) {
+        showToast('Du trenger minst 7 oppskrifter for ukeforslag', 'warning');
+        return;
+    }
+    
+    // Shuffle recipes and pick 7
+    const shuffled = [...state.recipes].sort(() => Math.random() - 0.5);
+    const suggestions = shuffled.slice(0, 7);
+    
+    const days = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
+    
+    const html = `
+        <p>Her er forslag til ukens måltider basert på dine oppskrifter:</p>
+        <div class="weekly-suggestions">
+            ${suggestions.map((recipe, i) => `
+                <div class="suggestion-day">
+                    <span class="suggestion-day-name">${days[i]}</span>
+                    <span class="suggestion-recipe">${escapeHtml(recipe.name)}</span>
+                </div>
+            `).join('')}
+        </div>
+        <button id="applySuggestionsBtn" class="action-btn primary" style="margin-top: 16px; width: 100%;">
+            ✅ Bruk disse forslagene
+        </button>
+        <button id="refreshSuggestionsBtn" class="action-btn secondary" style="margin-top: 8px; width: 100%;">
+            🔄 Nye forslag
+        </button>
+    `;
+    
+    showModal('💡 Ukens måltidsforslag', html, []);
+    
+    setTimeout(() => {
+        const applyBtn = $('applySuggestionsBtn');
+        const refreshBtn = $('refreshSuggestionsBtn');
+        
+        if (applyBtn) {
+            applyBtn.onclick = () => {
+                const today = new Date();
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+                
+                suggestions.forEach((recipe, i) => {
+                    const date = new Date(startOfWeek);
+                    date.setDate(startOfWeek.getDate() + i);
+                    const dateKey = date.toISOString().split('T')[0];
+                    
+                    const ingredients = recipe.ingredients ? recipe.ingredients.split('\n').filter(ing => ing.trim()) : [];
+                    state.mealPlan[dateKey] = {
+                        name: recipe.name,
+                        ingredients: ingredients
+                    };
+                });
+                
+                saveMealPlan();
+                updatePlannedMealsCount();
+                closeModal();
+                showToast('Ukemeny fylt ut med forslag!', 'success');
+            };
+        }
+        
+        if (refreshBtn) {
+            refreshBtn.onclick = () => {
+                closeModal();
+                getWeeklySuggestions();
+            };
+        }
+    }, 100);
+}
+window.getWeeklySuggestions = getWeeklySuggestions;
+
+// ===== RECIPE COLLECTIONS =====
+function createCollection() {
+    const name = prompt('Navn på samling (f.eks. "Søndagsmiddager", "Kjappe retter"):');
+    if (!name) return;
+    
+    const collections = JSON.parse(localStorage.getItem('kokebok_collections') || '{}');
+    collections[name] = [];
+    localStorage.setItem('kokebok_collections', JSON.stringify(collections));
+    
+    showToast(`Samling "${name}" opprettet!`, 'success');
+}
+
+function addToCollection(recipeId) {
+    const collections = JSON.parse(localStorage.getItem('kokebok_collections') || '{}');
+    const collectionNames = Object.keys(collections);
+    
+    if (collectionNames.length === 0) {
+        showToast('Du har ingen samlinger. Opprett en først!', 'warning');
+        createCollection();
+        return;
+    }
+    
+    const html = `
+        <p>Velg samling:</p>
+        <div class="collections-list">
+            ${collectionNames.map(name => `
+                <button class="collection-btn" data-collection="${escapeHtml(name)}">
+                    📁 ${escapeHtml(name)} (${collections[name].length})
+                </button>
+            `).join('')}
+        </div>
+    `;
+    
+    showModal('📁 Legg til i samling', html, []);
+    
+    setTimeout(() => {
+        document.querySelectorAll('.collection-btn').forEach(btn => {
+            btn.onclick = () => {
+                const collName = btn.dataset.collection;
+                if (!collections[collName].includes(recipeId)) {
+                    collections[collName].push(recipeId);
+                    localStorage.setItem('kokebok_collections', JSON.stringify(collections));
+                    showToast(`Lagt til i "${collName}"!`, 'success');
+                } else {
+                    showToast('Oppskriften er allerede i samlingen', 'info');
+                }
+                closeModal();
+            };
+        });
+    }, 100);
+}
+window.createCollection = createCollection;
+window.addToCollection = addToCollection;
+
+// ===== COOKING HISTORY =====
+function logCookingSession(recipeId) {
+    const history = JSON.parse(localStorage.getItem('kokebok_cooking_history') || '[]');
+    history.unshift({
+        recipeId,
+        date: new Date().toISOString()
+    });
+    // Keep last 50 entries
+    localStorage.setItem('kokebok_cooking_history', JSON.stringify(history.slice(0, 50)));
+}
+
+function showCookingHistory() {
+    const history = JSON.parse(localStorage.getItem('kokebok_cooking_history') || '[]');
+    
+    if (history.length === 0) {
+        showModal('📖 Kokehistorikk', '<p>Du har ikke laget noe ennå! Start kokemodus for å registrere.</p>', []);
+        return;
+    }
+    
+    const html = `
+        <div class="cooking-history-list">
+            ${history.slice(0, 20).map(entry => {
+                const recipe = state.recipes.find(r => r.id === entry.recipeId);
+                if (!recipe) return '';
+                const date = new Date(entry.date);
+                return `
+                    <div class="history-item">
+                        <span class="history-date">${date.toLocaleDateString('no-NO')}</span>
+                        <span class="history-recipe">${escapeHtml(recipe.name)}</span>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+    
+    showModal('📖 Kokehistorikk', html, []);
+}
+window.showCookingHistory = showCookingHistory;
 
 // Initialize new features
 setupKeyboardShortcuts();
@@ -3501,3 +4394,4 @@ window.estimateCost = estimateCost;
 window.shareToSocial = shareToSocial;
 window.showAchievements = showAchievements;
 window.checkAchievements = checkAchievements;
+window.closeRecipePicker = closeRecipePicker;

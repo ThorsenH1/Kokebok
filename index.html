@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=3.0">
+    <link rel="stylesheet" href="style.css?v=3.2">
 </head>
 <body>
     <!-- Login Screen -->
@@ -509,6 +509,40 @@
                     </div>
 
                     <div class="settings-section">
+                        <h3>🌍 Språk & Søk</h3>
+                        <div class="setting-item">
+                            <span class="setting-label">Søkespråk for oppskrifter</span>
+                            <select id="searchLanguageSelect" class="setting-select">
+                                <option value="no" selected>🇳🇴 Norsk (oversatt)</option>
+                                <option value="en">🇬🇧 English</option>
+                                <option value="de">🇩🇪 Deutsch</option>
+                                <option value="es">🇪🇸 Español</option>
+                                <option value="fr">🇫🇷 Français</option>
+                                <option value="it">🇮🇹 Italiano</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Norsk oversetter automatisk engelske oppskrifter til norsk</p>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>🔔 Varsler</h3>
+                        <div class="setting-item">
+                            <span class="setting-label">Timer-varsler</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="timerNotificationsToggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">Måltidspåminnelser</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="mealReminderToggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
                         <h3>💾 Data</h3>
                         <button id="exportDataBtn" class="settings-btn">
                             <span>📥</span> Eksporter alt
@@ -521,7 +555,7 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v3.0.0</p>
+                        <p class="app-version">Familiens Kokebok v3.2.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
                         <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">100% privat - ingen AI lærer av dine oppskrifter</p>
                     </div>
@@ -586,11 +620,28 @@
                 <button class="menu-item" id="menuMealPlanner">
                     <span>📅</span> Ukemeny
                 </button>
+                <button class="menu-item" id="menuWeeklySuggestions" onclick="getWeeklySuggestions(); toggleSideMenu(false);">
+                    <span>💡</span> Ukens forslag
+                    <span class="menu-badge">Premium</span>
+                </button>
                 <button class="menu-item" id="menuShoppingList">
                     <span>🛒</span> Handleliste
                 </button>
                 <button class="menu-item" id="menuTimer">
                     <span>⏱️</span> Koketimer
+                </button>
+                <hr class="menu-divider">
+                <button class="menu-item" onclick="showAllergyFilter(); toggleSideMenu(false);">
+                    <span>🚫</span> Allergi-filter
+                </button>
+                <button class="menu-item" onclick="showCookbookStats(); toggleSideMenu(false);">
+                    <span>📊</span> Statistikk
+                </button>
+                <button class="menu-item" onclick="showCookingHistory(); toggleSideMenu(false);">
+                    <span>📖</span> Kokehistorikk
+                </button>
+                <button class="menu-item" onclick="showAchievements(); toggleSideMenu(false);">
+                    <span>🏆</span> Prestasjoner
                 </button>
                 <hr class="menu-divider">
                 <button class="menu-item" id="menuLanguage">
@@ -702,28 +753,70 @@
         </div>
     </div>
 
+    <!-- Recipe Picker Modal (for Meal Planner) -->
+    <div id="recipePickerModal" class="feature-modal hidden">
+        <div class="feature-modal-overlay"></div>
+        <div class="feature-modal-content large">
+            <div class="feature-modal-header gradient-header-purple">
+                <h3>🍽️ Velg oppskrift</h3>
+                <p id="pickerDateLabel">Velg for mandag</p>
+                <button id="closeRecipePickerBtn" class="modal-close-btn">✕</button>
+            </div>
+            <div class="feature-modal-body">
+                <div class="picker-tabs">
+                    <button class="picker-tab active" data-tab="mine">📝 Mine oppskrifter</button>
+                    <button class="picker-tab" data-tab="saved">💾 Lagrede fra søk</button>
+                    <button class="picker-tab" data-tab="quick">✏️ Skriv inn</button>
+                </div>
+                <div class="picker-search">
+                    <input type="text" id="pickerSearchInput" placeholder="🔍 Søk etter oppskrift...">
+                    <select id="pickerCategoryFilter">
+                        <option value="">Alle kategorier</option>
+                    </select>
+                </div>
+                <div id="pickerRecipesList" class="picker-recipes-list">
+                    <!-- Recipes rendered here -->
+                </div>
+                <div id="pickerQuickInput" class="picker-quick-input hidden">
+                    <input type="text" id="quickMealInput" placeholder="Skriv inn måltid (f.eks. 'Pizza', 'Restemat')">
+                    <button id="quickMealConfirmBtn" class="action-btn primary">Legg til</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Shopping List Modal (Handleliste) -->
     <div id="shoppingListModal" class="feature-modal hidden">
         <div class="feature-modal-overlay"></div>
         <div class="feature-modal-content">
             <div class="feature-modal-header gradient-header-orange">
                 <h3>🛒 Handleliste</h3>
-                <p>Din automatisk genererte handleliste</p>
+                <p>Din smarte handleliste</p>
                 <button id="closeShoppingListBtn" class="modal-close-btn">✕</button>
             </div>
             <div class="feature-modal-body">
-                <div id="shoppingListContent" class="shopping-list">
+                <div class="shopping-list-controls">
+                    <div class="shopping-sort">
+                        <button class="sort-btn active" data-sort="added">Rekkefølge</button>
+                        <button class="sort-btn" data-sort="category">Kategori</button>
+                        <button class="sort-btn" data-sort="alpha">A-Å</button>
+                    </div>
+                </div>
+                <div id="shoppingListItems" class="shopping-list">
                     <!-- Shopping items rendered here -->
+                </div>
+                <div class="shopping-list-stats">
+                    <span id="shoppingListStats">0 varer • 0 kjøpt</span>
                 </div>
                 <div class="shopping-list-actions">
                     <button id="addShoppingItemBtn" class="action-btn secondary">
-                        <span>➕</span> Legg til vare
+                        <span>➕</span> Legg til
+                    </button>
+                    <button id="clearCheckedBtn" class="action-btn secondary">
+                        <span>✓</span> Fjern kjøpte
                     </button>
                     <button id="shareShoppingListBtn" class="action-btn primary">
-                        <span>📤</span> Del liste
-                    </button>
-                    <button id="clearShoppingListBtn" class="action-btn danger">
-                        <span>🗑️</span> Tøm liste
+                        <span>📤</span> Del
                     </button>
                 </div>
             </div>
@@ -882,7 +975,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-config.js?v=3.1"></script>
-    <script src="app.js?v=3.1"></script>
+    <script src="firebase-config.js?v=3.2"></script>
+    <script src="app.js?v=3.2"></script>
 </body>
 </html>
