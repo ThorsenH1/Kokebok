@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=3.2">
+    <link rel="stylesheet" href="style.css?v=3.3">
 </head>
 <body>
     <!-- Login Screen -->
@@ -612,27 +612,62 @@
                 <button class="menu-item" id="menuFavorites">
                     <span>⭐</span> Favoritter
                 </button>
+                
                 <hr class="menu-divider">
+                <div class="menu-section-title">🍳 Matlaging</div>
+                
                 <button class="menu-item" id="menuSearchRecipes">
                     <span>🔍</span> Finn oppskrifter
-                    <span class="menu-badge">Ny!</span>
+                </button>
+                <button class="menu-item" onclick="openWhatCanIMake(); toggleSideMenu(false);">
+                    <span>🧊</span> Hva kan jeg lage?
+                    <span class="menu-badge new">Ny!</span>
+                </button>
+                <button class="menu-item" onclick="openQuickRecipeFromText(); toggleSideMenu(false);">
+                    <span>📝</span> Lim inn oppskrift
+                    <span class="menu-badge new">Ny!</span>
                 </button>
                 <button class="menu-item" id="menuMealPlanner">
                     <span>📅</span> Ukemeny
                 </button>
-                <button class="menu-item" id="menuWeeklySuggestions" onclick="getWeeklySuggestions(); toggleSideMenu(false);">
+                <button class="menu-item" onclick="getWeeklySuggestions(); toggleSideMenu(false);">
                     <span>💡</span> Ukens forslag
-                    <span class="menu-badge">Premium</span>
                 </button>
+                <button class="menu-item" onclick="openMealPrepAssistant(); toggleSideMenu(false);">
+                    <span>🥡</span> Meal Prep
+                    <span class="menu-badge premium">Premium</span>
+                </button>
+                
+                <hr class="menu-divider">
+                <div class="menu-section-title">🛒 Handle</div>
+                
                 <button class="menu-item" id="menuShoppingList">
                     <span>🛒</span> Handleliste
                 </button>
+                <button class="menu-item" onclick="optimizeGroceryList(); toggleSideMenu(false);">
+                    <span>🗂️</span> Smart handleliste
+                    <span class="menu-badge premium">Premium</span>
+                </button>
+                <button class="menu-item" onclick="openBudgetPlanner(); toggleSideMenu(false);">
+                    <span>💵</span> Ukesbudsjett
+                    <span class="menu-badge premium">Premium</span>
+                </button>
+                
+                <hr class="menu-divider">
+                <div class="menu-section-title">📊 Verktøy</div>
+                
                 <button class="menu-item" id="menuTimer">
                     <span>⏱️</span> Koketimer
                 </button>
-                <hr class="menu-divider">
                 <button class="menu-item" onclick="showAllergyFilter(); toggleSideMenu(false);">
                     <span>🚫</span> Allergi-filter
+                </button>
+                <button class="menu-item" onclick="showHouseholdSelector(); toggleSideMenu(false);">
+                    <span>🏠</span> Velg husstand
+                    <span class="menu-badge new">Ny!</span>
+                </button>
+                <button class="menu-item" onclick="showTopRatedRecipes(); toggleSideMenu(false);">
+                    <span>⭐</span> Toppratede
                 </button>
                 <button class="menu-item" onclick="showCookbookStats(); toggleSideMenu(false);">
                     <span>📊</span> Statistikk
@@ -643,6 +678,7 @@
                 <button class="menu-item" onclick="showAchievements(); toggleSideMenu(false);">
                     <span>🏆</span> Prestasjoner
                 </button>
+                
                 <hr class="menu-divider">
                 <button class="menu-item" id="menuLanguage">
                     <span>🌍</span> Språk
@@ -976,6 +1012,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js?v=3.2"></script>
-    <script src="app.js?v=3.2"></script>
+    <script src="app.js?v=3.3"></script>
 </body>
 </html>
