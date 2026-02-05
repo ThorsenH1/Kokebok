@@ -9095,6 +9095,125 @@ body.font-large { font-size: 18px; }
     gap: 0.75rem;
 }
 
+/* Shared Cookbooks */
+.shared-cookbooks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.shared-cookbook-card {
+    position: relative;
+    padding: 1.1rem 1.1rem 1rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--bg-card));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    overflow: hidden;
+}
+
+.shared-cookbook-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(600px 120px at 0% 0%, rgba(244, 164, 96, 0.18), transparent 60%);
+    pointer-events: none;
+}
+
+.shared-cookbook-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: rgba(244, 164, 96, 0.35);
+}
+
+.shared-cookbook-card.new {
+    border-left: 4px solid var(--success);
+    background: linear-gradient(90deg, #e8f5e9 0%, var(--bg-card) 55%);
+}
+
+.shared-cookbook-card.accepted {
+    border-left: 4px solid var(--primary);
+    background: linear-gradient(90deg, rgba(244, 164, 96, 0.18) 0%, var(--bg-card) 60%);
+}
+
+.shared-cookbook-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.shared-cookbook-info h4 {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.shared-from,
+.recipe-count {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0.15rem 0;
+}
+
+.shared-cookbook-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-input);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+}
+
+.shared-cookbook-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.share-message {
+    margin: 0.6rem 0 0.75rem;
+    padding: 0.6rem 0.75rem;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 12px;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.shared-cookbook-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.accepted-badge {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 10px;
+}
+
+.accepted-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.shared-section h4 {
+    margin: 0 0 0.6rem;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+
 .shared-recipe-card {
     display: flex;
     align-items: center;
@@ -9496,6 +9615,7 @@ body.font-large { font-size: 18px; }
 body.dark-mode .friend-card,
 body.dark-mode .request-card,
 body.dark-mode .shared-recipe-card,
+body.dark-mode .shared-cookbook-card,
 body.dark-mode .leaderboard-item,
 body.dark-mode .profile-stat,
 body.dark-mode .recipe-picker-item,
@@ -9541,6 +9661,23 @@ body.dark-mode .leaderboard-item.is-me {
 
 body.dark-mode .shared-recipe-card.new {
     background: linear-gradient(90deg, rgba(40, 167, 69, 0.15) 0%, var(--bg-card) 50%);
+}
+
+body.dark-mode .shared-cookbook-card {
+    background: linear-gradient(135deg, rgba(30, 30, 30, 0.85), var(--bg-card));
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .shared-cookbook-card.accepted {
+    background: linear-gradient(90deg, rgba(244, 164, 96, 0.15) 0%, var(--bg-card) 60%);
+}
+
+body.dark-mode .shared-cookbook-card.new {
+    background: linear-gradient(90deg, rgba(40, 167, 69, 0.18) 0%, var(--bg-card) 60%);
+}
+
+body.dark-mode .share-message {
+    background: rgba(255, 255, 255, 0.06);
 }
 
 body.dark-mode .recipe-picker-item:hover {

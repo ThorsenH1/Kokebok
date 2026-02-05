@@ -152,6 +152,7 @@ const state = {
     friendRequests: [],
     sentRequests: [],
     sharedRecipes: [],
+    sharedCookbooks: [],
     // v4.1 - Kitchen equipment
     equipment: [],
     pantryItems: []
@@ -285,18 +286,10 @@ async function loadCollection(collection) {
 async function setupAuth() {
     console.log('🔐 Initialiserer autentisering...');
     
-    // Sjekk om vi er i en iframe eller har restriksjoner (iOS Safari)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    
+    // Bruk LOCAL persistence for alle enheter - dette holder brukeren innlogget
     try {
-        // For iOS Safari, bruk SESSION for bedre kompatibilitet
-        if (isIOS || isSafari) {
-            await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
-            console.log('📱 iOS/Safari modus - bruker SESSION persistence');
-        } else {
-            await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-        }
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        console.log('✓ Auth persistence satt til LOCAL');
     } catch (e) {
         console.warn('Kunne ikke sette persistence:', e);
     }
@@ -975,6 +968,8 @@ function setupEventListeners() {
     on('addRecipeBtn', 'click', () => openRecipeEditor());
     on('addBookBtn', 'click', () => openBookEditor());
     on('navAddBtn', 'click', () => showAddMenu());
+    on('importBookBtn', 'click', () => $('importBookFileInput')?.click());
+    on('importBookFileInput', 'change', handleBookFileImport);
     
     // New v3.0 Feature Buttons
     on('searchRecipesBtn', 'click', openRecipeSearch);
@@ -1352,7 +1347,9 @@ function updateSocialCard() {
         leaderboardRankEl.textContent = `Lv.${level}`;
     }
     
-    const pending = (state.friendRequests?.length || 0) + (state.sharedRecipes?.filter(r => !r.viewed)?.length || 0);
+    const pending = (state.friendRequests?.length || 0)
+        + (state.sharedRecipes?.filter(r => !r.viewed)?.length || 0)
+        + (state.sharedCookbooks?.filter(s => !s.viewed && !s.accepted)?.length || 0);
     if (requestBadge && pendingCount) {
         if (pending > 0) {
             requestBadge.style.display = 'flex';
@@ -2171,6 +2168,12 @@ function renderBookView() {
             <button class="book-action-btn" id="addRecipeToBookBtn">
                 <span>➕</span> Ny oppskrift
             </button>
+            <button class="book-action-btn" id="shareBookBtn">
+                <span>📚</span> Del kokebok
+            </button>
+            <button class="book-action-btn" id="exportBookActionBtn">
+                <span>📄</span> Eksporter
+            </button>
         </div>
         
         <div class="book-recipes-section">
@@ -2203,6 +2206,16 @@ function renderBookView() {
         setTimeout(() => {
             $('recipeBook').value = book.id;
         }, 100);
+    });
+
+    // Share book button
+    on($('shareBookBtn'), 'click', () => {
+        shareBookWithFriends();
+    });
+
+    // Export book file button
+    on($('exportBookActionBtn'), 'click', () => {
+        exportBookFile();
     });
     
     // Recipe click handlers
@@ -2542,6 +2555,109 @@ function exportBook() {
     
     showToast('Kokebok eksportert som HTML', 'success');
 }
+
+// Export cookbook as shareable JSON file
+function exportBookFile() {
+    if (!state.currentBook) return;
+    
+    const book = state.currentBook;
+    const recipes = state.recipes.filter(r => r.bookId === book.id);
+    
+    const exportData = {
+        type: 'kokebok-book',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        book: {
+            name: book.name,
+            description: book.description || '',
+            owner: book.owner || '',
+            year: book.year || '',
+            coverImage: book.coverImage || ''
+        },
+        recipes: recipes.map(r => ({
+            name: r.name,
+            category: r.category,
+            ingredients: r.ingredients,
+            instructions: r.instructions,
+            servings: r.servings,
+            prepTime: r.prepTime,
+            cookTime: r.cookTime,
+            notes: r.notes,
+            tags: r.tags,
+            images: r.images || []
+        }))
+    };
+    
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${book.name.replace(/[^a-zA-Z0-9æøåÆØÅ ]/g, '_')}.kokebok.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast('Kokebok eksportert som fil', 'success');
+}
+window.exportBookFile = exportBookFile;
+
+// Import cookbook from file
+async function handleBookFileImport(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        if (data?.type !== 'kokebok-book' || !data.book) {
+            showToast('Ugyldig kokebokfil', 'error');
+            return;
+        }
+        
+        const importedBook = {
+            name: `${data.book.name} (importert)`,
+            description: data.book.description || '',
+            owner: data.book.owner || '',
+            year: data.book.year || '',
+            coverImage: data.book.coverImage || '',
+            importedAt: new Date().toISOString()
+        };
+        
+        const bookId = await saveToFirestore('books', null, importedBook);
+        state.books.push({ id: bookId, ...importedBook });
+        
+        const recipes = Array.isArray(data.recipes) ? data.recipes : [];
+        for (const r of recipes) {
+            const newRecipe = {
+                name: r.name,
+                category: r.category || 'annet',
+                ingredients: r.ingredients || '',
+                instructions: r.instructions || '',
+                servings: r.servings || '',
+                prepTime: r.prepTime || '',
+                cookTime: r.cookTime || '',
+                notes: r.notes || '',
+                tags: r.tags || '',
+                images: r.images || [],
+                bookId: bookId,
+                importedAt: new Date().toISOString()
+            };
+            const recipeId = await saveToFirestore('recipes', null, newRecipe);
+            state.recipes.push({ id: recipeId, ...newRecipe });
+        }
+        
+        showToast(`📚 Kokebok importert (${recipes.length} oppskrifter)`, 'success');
+        renderBookList();
+        
+    } catch (e) {
+        console.error('Import cookbook error:', e);
+        showToast('Kunne ikke importere kokebok', 'error');
+    } finally {
+        if (event?.target) event.target.value = '';
+    }
+}
+window.handleBookFileImport = handleBookFileImport;
 
 // ===== Categories View =====
 function renderCategoriesView() {
@@ -5158,6 +5274,14 @@ async function loadSocialData() {
             .sort((a, b) => (b.sharedAt?.toMillis?.() || 0) - (a.sharedAt?.toMillis?.() || 0))
             .slice(0, 20);
         
+        // Load shared cookbooks
+        const sharedCookSnap = await db.collection('sharedCookbooks')
+            .where('toUid', '==', state.user.uid)
+            .get();
+        state.sharedCookbooks = sharedCookSnap.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => (b.sharedAt?.toMillis?.() || 0) - (a.sharedAt?.toMillis?.() || 0));
+        
         // Update public profile
         await updatePublicProfile();
         
@@ -5176,7 +5300,33 @@ function setupSocialListeners() {
     if (socialListenersSetup || !state.user) return;
     socialListenersSetup = true;
     
-    // Listen for new friend requests
+    console.log('🔄 Setter opp sanntidslyttere for sosiale data...');
+    
+    // CRITICAL: Listen for changes to MY friends list (real-time sync when friend accepts)
+    db.collection('users').doc(state.user.uid).collection('friends')
+        .onSnapshot(snapshot => {
+            const oldCount = state.friends.length;
+            state.friends = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Notify if a new friend was added (by someone accepting our request)
+            const changes = snapshot.docChanges();
+            const newFriends = changes.filter(c => c.type === 'added');
+            if (newFriends.length > 0 && oldCount > 0) {
+                const newFriend = newFriends[0].doc.data();
+                showToast(`🎉 ${newFriend.displayName || newFriend.email} er nå din venn!`, 'success');
+                triggerConfetti();
+            }
+            
+            // Update UI if friends panel is open
+            const friendsContent = $('friendsTabContent');
+            if (friendsContent && document.querySelector('.friends-tab.active[onclick*="friends"]')) {
+                friendsContent.innerHTML = renderFriendsList();
+            }
+            
+            console.log(`✓ Venneliste oppdatert: ${state.friends.length} venner`);
+        }, err => console.warn('Friends listener error:', err.message));
+    
+    // Listen for new friend requests TO me
     db.collection('friendRequests')
         .where('toUid', '==', state.user.uid)
         .where('status', '==', 'pending')
@@ -5191,7 +5341,28 @@ function setupSocialListeners() {
             
             state.friendRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             updateFriendNotificationBadge();
+            
+            // Update UI if requests panel is open
+            const friendsContent = $('friendsTabContent');
+            if (friendsContent && document.querySelector('.friends-tab.active[onclick*="requests"]')) {
+                friendsContent.innerHTML = renderFriendRequests();
+            }
         }, err => console.warn('Friend request listener error:', err.message));
+    
+    // Listen for MY sent requests (to see when they're accepted/declined)
+    db.collection('friendRequests')
+        .where('fromUid', '==', state.user.uid)
+        .onSnapshot(snapshot => {
+            state.sentRequests = snapshot.docs
+                .filter(doc => doc.data().status === 'pending')
+                .map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Update UI if requests panel is open
+            const friendsContent = $('friendsTabContent');
+            if (friendsContent && document.querySelector('.friends-tab.active[onclick*="requests"]')) {
+                friendsContent.innerHTML = renderFriendRequests();
+            }
+        }, err => console.warn('Sent requests listener error:', err.message));
     
     // Listen for new shared recipes (without orderBy to avoid composite index)
     db.collection('sharedRecipes')
@@ -5213,6 +5384,27 @@ function setupSocialListeners() {
                 .slice(0, 20);
             updateFriendNotificationBadge();
         }, err => console.warn('Shared recipes listener error:', err.message));
+
+    // Listen for new shared cookbooks
+    db.collection('sharedCookbooks')
+        .where('toUid', '==', state.user.uid)
+        .onSnapshot(snapshot => {
+            const changes = snapshot.docChanges();
+            const newShares = changes.filter(c => c.type === 'added');
+            
+            if (newShares.length > 0 && state.sharedCookbooks.length > 0) {
+                const share = newShares[0].doc.data();
+                showToast(`📚 ${share.fromName} delte kokeboken "${share.cookbookName}" med deg!`, 'success');
+                notifySharedCookbook(share.fromName, share.cookbookName);
+            }
+            
+            state.sharedCookbooks = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .sort((a, b) => (b.sharedAt?.toMillis?.() || 0) - (a.sharedAt?.toMillis?.() || 0));
+            updateFriendNotificationBadge();
+        }, err => console.warn('Shared cookbooks listener error:', err.message));
+    
+    console.log('✓ Alle sanntidslyttere aktivert');
 }
 
 // Update public profile for leaderboard/friends
@@ -5250,7 +5442,8 @@ async function updatePublicProfile() {
 // Open friends panel
 function openFriendsPanel() {
     const pendingCount = state.friendRequests.length;
-    const sharedCount = state.sharedRecipes.filter(r => !r.viewed).length;
+    const sharedCount = state.sharedRecipes.filter(r => !r.viewed).length +
+        state.sharedCookbooks.filter(s => !s.viewed && !s.accepted).length;
     
     const html = `
         <div class="friends-panel">
@@ -5294,7 +5487,8 @@ function switchFriendsTab(tab) {
             content.innerHTML = renderFriendRequests();
             break;
         case 'shared':
-            content.innerHTML = renderSharedRecipes();
+            content.innerHTML = renderSharedContent();
+            markSharedCookbooksViewed();
             break;
         case 'leaderboard':
             content.innerHTML = '<div class="loading-spinner">Laster toppliste...</div>';
@@ -5303,6 +5497,201 @@ function switchFriendsTab(tab) {
     }
 }
 window.switchFriendsTab = switchFriendsTab;
+
+// ===== COOKBOOK SHARING =====
+
+// Open cookbook sharing modal
+function shareBookWithFriends() {
+    if (!state.currentBook) {
+        showToast('Velg en kokebok først', 'warning');
+        return;
+    }
+    
+    const book = state.currentBook;
+    const friendsList = state.friends.map(f => `
+        <div class="friend-checkbox">
+            <input type="checkbox" id="friend_${f.id}" value="${f.friendUid}">
+            <label for="friend_${f.id}">
+                ${f.photoURL ? `<img src="${f.photoURL}" class="friend-avatar">` : '👤'}
+                ${escapeHtml(f.displayName)}
+            </label>
+        </div>
+    `).join('');
+    
+    if (state.friends.length === 0) {
+        showToast('Du må ha venner for å dele kokeboken', 'info');
+        return;
+    }
+    
+    const html = `
+        <div class="share-cookbook-modal">
+            <h3>📚 Del kokebok: ${escapeHtml(book.name)}</h3>
+            <p>Velg venner du vil dele denne kokeboken med:</p>
+            
+            <div class="share-friends-list">
+                ${friendsList}
+            </div>
+            
+            <textarea id="shareMessage" placeholder="Legg til en melding (valgfritt)" class="share-message" maxlength="200"></textarea>
+            
+            <div class="modal-actions">
+                <button onclick="confirmShareBook('${book.id}')" class="btn-primary">Del kokebok</button>
+                <button onclick="closeGenericModal()" class="btn-secondary">Avbryt</button>
+            </div>
+        </div>
+    `;
+    
+    showModal('📚 Del kokebok', html, []);
+}
+window.shareBookWithFriends = shareBookWithFriends;
+
+// Confirm and share cookbook
+async function confirmShareBook(bookId) {
+    const book = state.books.find(b => b.id === bookId);
+    if (!book) return;
+    
+    // Get selected friends
+    const selectedFriends = Array.from(document.querySelectorAll('.friend-checkbox input:checked'))
+        .map(input => input.value);
+    
+    if (selectedFriends.length === 0) {
+        showToast('Velg minst en venn', 'warning');
+        return;
+    }
+    
+    const message = document.getElementById('shareMessage')?.value || '';
+    
+    try {
+        // Share with each selected friend
+        for (const friendUid of selectedFriends) {
+            const friend = state.friends.find(f => f.friendUid === friendUid);
+            if (!friend) continue;
+            
+            // Get all recipes in this book
+            const cookbookRecipes = state.recipes.filter(r => r.bookId === bookId);
+            
+            await db.collection('sharedCookbooks').add({
+                fromUid: state.user.uid,
+                fromName: state.user.displayName,
+                fromPhoto: state.user.photoURL,
+                toUid: friendUid,
+                toName: friend.displayName,
+                toEmail: friend.email,
+                cookbookId: bookId,
+                cookbookName: book.name,
+                cookbookDescription: book.description || '',
+                recipeCount: cookbookRecipes.length,
+                message: message,
+                recipes: cookbookRecipes.map(r => ({
+                    id: r.id,
+                    name: r.name,
+                    category: r.category,
+                    ingredients: r.ingredients,
+                    instructions: r.instructions,
+                    servings: r.servings,
+                    prepTime: r.prepTime,
+                    cookTime: r.cookTime,
+                    images: r.images?.slice(0, 1) || []
+                })),
+                sharedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                accepted: false,
+                viewed: false
+            });
+        }
+        
+        closeGenericModal();
+        showToast(`📚 Kokebok delt med ${selectedFriends.length} venn${selectedFriends.length > 1 ? 'er' : ''}! 🎉`, 'success');
+        addXP(10, 'Delt kokebok med venn');
+        
+    } catch (e) {
+        console.error('Share book error:', e);
+        showToast('Kunne ikke dele kokeboken', 'error');
+    }
+}
+window.confirmShareBook = confirmShareBook;
+
+// Accept shared cookbook
+async function acceptSharedCookbook(shareId) {
+    const share = state.sharedCookbooks.find(s => s.id === shareId);
+    if (!share) return;
+    
+    try {
+        // Create new cookbook from shared data
+        const newBook = {
+            name: `${share.cookbookName} (fra ${share.fromName})`,
+            description: share.cookbookDescription,
+            fromFriend: share.fromName,
+            sharedFrom: share.fromUid,
+            sharedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+        };
+        
+        const bookId = await saveToFirestore('books', null, newBook);
+        const newBook_full = { id: bookId, ...newBook };
+        state.books.push(newBook_full);
+        
+        // Add all recipes to this new book
+        for (const recipeData of (share.recipes || [])) {
+            const newRecipe = {
+                ...recipeData,
+                bookId: bookId,
+                copiedFrom: share.fromUid,
+                createdAt: new Date().toISOString()
+            };
+            const recipeId = await saveToFirestore('recipes', null, newRecipe);
+            state.recipes.push({ id: recipeId, ...newRecipe });
+        }
+        
+        // Mark as accepted
+        await db.collection('sharedCookbooks').doc(shareId).update({
+            accepted: true,
+            acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            viewed: true
+        });
+        share.accepted = true;
+        share.viewed = true;
+        
+        showToast(`📚 Kokebok "${share.cookbookName}" mottatt! 🎉`, 'success');
+        triggerConfetti();
+        addXP(5, 'Akseptert delt kokebok');
+        
+        // Refresh view
+        renderBookList();
+        updateFriendNotificationBadge();
+        
+    } catch (e) {
+        console.error('Accept cookbook error:', e);
+        showToast('Kunne ikke motta kokeboken', 'error');
+    }
+}
+window.acceptSharedCookbook = acceptSharedCookbook;
+
+// Reject shared cookbook
+async function rejectSharedCookbook(shareId) {
+    try {
+        await db.collection('sharedCookbooks').doc(shareId).delete();
+        state.sharedCookbooks = state.sharedCookbooks.filter(s => s.id !== shareId);
+        showToast('Kokebok avslått', 'info');
+        updateFriendNotificationBadge();
+    } catch (e) {
+        console.error('Reject cookbook error:', e);
+    }
+}
+window.rejectSharedCookbook = rejectSharedCookbook;
+
+// Mark shared cookbooks as viewed
+async function markSharedCookbooksViewed() {
+    const unviewed = state.sharedCookbooks.filter(s => !s.viewed);
+    if (unviewed.length === 0) return;
+    
+    for (const share of unviewed) {
+        try {
+            await db.collection('sharedCookbooks').doc(share.id).update({ viewed: true });
+            share.viewed = true;
+        } catch (e) {}
+    }
+    updateFriendNotificationBadge();
+}
 
 // Render friends list
 function renderFriendsList() {
@@ -5439,17 +5828,90 @@ function renderSharedRecipes() {
     return html;
 }
 
+// Render shared cookbooks
+function renderSharedCookbooks() {
+    if (state.sharedCookbooks.length === 0) {
+        return `
+            <div class="empty-state">
+                <span class="empty-icon">📚</span>
+                <p>Ingen delte kokebøker</p>
+                <p class="empty-hint">Når venner deler kokebøker med deg, vises de her!</p>
+            </div>
+        `;
+    }
+    
+    let html = `<div class="shared-cookbooks-list">`;
+    for (const share of state.sharedCookbooks) {
+        const isNew = !share.viewed && !share.accepted;
+        const isAccepted = share.accepted;
+        html += `
+            <div class="shared-cookbook-card ${isNew ? 'new' : ''} ${isAccepted ? 'accepted' : ''}">
+                ${isNew ? '<span class="new-badge">NY!</span>' : ''}
+                ${isAccepted ? '<span class="accepted-badge">✓ Mottatt</span>' : ''}
+                <div class="shared-cookbook-header">
+                    <div class="shared-cookbook-info">
+                        <h4>${escapeHtml(share.cookbookName)}</h4>
+                        <p class="shared-from">Fra: ${escapeHtml(share.fromName)}</p>
+                        <p class="recipe-count">📖 ${share.recipeCount} oppskrifter</p>
+                    </div>
+                    <div class="shared-cookbook-avatar">
+                        ${share.fromPhoto ? `<img src="${share.fromPhoto}" alt="">` : '👤'}
+                    </div>
+                </div>
+                ${share.message ? `<p class="share-message">"${escapeHtml(share.message)}"</p>` : ''}
+                <div class="shared-cookbook-actions">
+                    ${!isAccepted ? `
+                        <button class="btn btn-primary btn-sm" onclick="acceptSharedCookbook('${share.id}')">
+                            ✓ Godta
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="rejectSharedCookbook('${share.id}')">
+                            ✗ Avslå
+                        </button>
+                    ` : `
+                        <span class="accepted-text">Du har mottatt denne kokeboken</span>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+    html += `</div>`;
+    
+    return html;
+}
+
+// Shared tab content (recipes + cookbooks)
+function renderSharedContent() {
+    const cookbooksHtml = renderSharedCookbooks();
+    const recipesHtml = renderSharedRecipes();
+    
+    return `
+        <div class="shared-section">
+            <h4>📚 Delte kokebøker</h4>
+            ${cookbooksHtml}
+        </div>
+        <div class="shared-section" style="margin-top: 24px;">
+            <h4>🎁 Delte oppskrifter</h4>
+            ${recipesHtml}
+        </div>
+    `;
+}
+
 // Load leaderboard
 async function loadLeaderboard() {
     try {
-        // Get top 20 public profiles by XP
+        // Get public profiles and sort client-side to avoid composite index requirement
         const snapshot = await db.collection('publicProfiles')
             .where('isPublic', '==', true)
-            .orderBy('xp', 'desc')
-            .limit(20)
+            .limit(100)
             .get();
         
-        const profiles = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+        let profiles = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+        
+        // Sort by XP descending (client-side to avoid composite index)
+        profiles.sort((a, b) => (b.xp || 0) - (a.xp || 0));
+        
+        // Take top 20
+        profiles = profiles.slice(0, 20);
         
         // Find current user's rank
         let userRank = profiles.findIndex(p => p.uid === state.user?.uid) + 1;
@@ -5621,46 +6083,77 @@ async function sendFriendRequest() {
 }
 window.sendFriendRequest = sendFriendRequest;
 
-// Accept friend request
+// Accept friend request - COMPLETELY REWRITTEN for proper two-way friendship
 async function acceptFriendRequest(requestId) {
     const request = state.friendRequests.find(r => r.id === requestId);
-    if (!request) return;
+    if (!request) {
+        console.error('Friend request not found:', requestId);
+        showToast('Forespørsel ikke funnet', 'error');
+        return;
+    }
+    
+    console.log('🤝 Godtar venneforespørsel fra:', request.fromName);
+    
+    // Show loading state
+    const btn = document.querySelector(`button[onclick*="acceptFriendRequest('${requestId}')"]`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-small"></span>';
+    }
     
     try {
-        // Update request status
-        await db.collection('friendRequests').doc(requestId).update({
+        // Use a batch write to ensure BOTH friend entries are created atomically
+        const batch = db.batch();
+        
+        // 1. Update the friend request status
+        const requestRef = db.collection('friendRequests').doc(requestId);
+        batch.update(requestRef, {
             status: 'accepted',
             acceptedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Add to both users' friend lists
-        const friendData = {
-            addedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        
-        // Add friend to my list
-        await db.collection('users').doc(state.user.uid).collection('friends').add({
-            ...friendData,
+        // 2. Add friend to MY list (I'm accepting, so request.fromUid is my new friend)
+        const myFriendRef = db.collection('users').doc(state.user.uid).collection('friends').doc();
+        batch.set(myFriendRef, {
             friendUid: request.fromUid,
             email: request.fromEmail,
             displayName: request.fromName,
-            photoURL: request.fromPhoto
+            photoURL: request.fromPhoto || null,
+            addedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Add me to their list
-        await db.collection('users').doc(request.fromUid).collection('friends').add({
-            ...friendData,
+        // 3. Add ME to THEIR list (so it's two-way!)
+        const theirFriendRef = db.collection('users').doc(request.fromUid).collection('friends').doc();
+        batch.set(theirFriendRef, {
             friendUid: state.user.uid,
             email: state.user.email,
-            displayName: state.user.displayName,
-            photoURL: state.user.photoURL
+            displayName: state.user.displayName || 'Anonym',
+            photoURL: state.user.photoURL || null,
+            addedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        // Commit the batch - all or nothing
+        await batch.commit();
+        
+        console.log('✓ Toveis vennskap opprettet!');
+        
+        // Update local state (real-time listener will also update, but this is faster)
+        state.friendRequests = state.friendRequests.filter(r => r.id !== requestId);
+        state.friends.push({
+            id: myFriendRef.id,
+            friendUid: request.fromUid,
+            email: request.fromEmail,
+            displayName: request.fromName,
+            photoURL: request.fromPhoto,
+            addedAt: new Date()
+        });
+        
+        // Show success
         showToast(`Du er nå venn med ${request.fromName}! 🎉`, 'success');
         triggerConfetti();
+        switchFriendsTab('friends');
         
-        // Achievement check
-        await loadSocialData();
+        // Check achievements
         if (state.friends.length === 1) {
             unlockAchievement('firstFriend');
         }
@@ -5668,11 +6161,26 @@ async function acceptFriendRequest(requestId) {
             unlockAchievement('socialButterfly');
         }
         
-        switchFriendsTab('friends');
-        
     } catch (e) {
         console.error('Accept friend error:', e);
-        showToast('Kunne ikke godta forespørselen', 'error');
+        
+        // Re-enable button
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '✓ Godta';
+        }
+        
+        // Show detailed error
+        if (e.code === 'permission-denied') {
+            showToast('Ingen tilgang - sjekk at du er logget inn', 'error');
+        } else if (e.code === 'not-found') {
+            showToast('Forespørselen finnes ikke lenger', 'error');
+            // Remove from local state
+            state.friendRequests = state.friendRequests.filter(r => r.id !== requestId);
+            switchFriendsTab('requests');
+        } else {
+            showToast('Kunne ikke godta forespørselen: ' + e.message, 'error');
+        }
     }
 }
 window.acceptFriendRequest = acceptFriendRequest;
@@ -5992,7 +6500,8 @@ function updateFriendNotificationBadge() {
     
     const pendingRequests = state.friendRequests?.length || 0;
     const unviewedShares = state.sharedRecipes?.filter(r => !r.viewed)?.length || 0;
-    const total = pendingRequests + unviewedShares;
+    const unviewedCookbooks = state.sharedCookbooks?.filter(s => !s.viewed && !s.accepted)?.length || 0;
+    const total = pendingRequests + unviewedShares + unviewedCookbooks;
     
     if (total > 0) {
         badge.textContent = total > 9 ? '9+' : total;
@@ -6058,17 +6567,31 @@ async function subscribeToPush() {
         
         // Save subscription to Firestore for server-side notifications
         if (state.user) {
-            await db.collection('pushSubscriptions').doc(state.user.uid).set({
-                userId: state.user.uid, // Required by Firebase security rules
-                subscription: JSON.stringify(subscription),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            try {
+                await db.collection('pushSubscriptions').doc(state.user.uid).set({
+                    userId: state.user.uid,
+                    subscription: JSON.stringify(subscription),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                
+                console.log('✓ Push subscription saved');
+            } catch (writeError) {
+                if (writeError.message && writeError.message.includes('permission')) {
+                    console.warn('⚠️ Push notification permission denied by Firestore rules');
+                    console.log('Tip: User may need to verify their email or check privacy settings');
+                    showToast('Kunne ikke aktivere push-varsler - sjekk innstillinger', 'warning');
+                } else {
+                    throw writeError;
+                }
+            }
         }
         
-        console.log('✓ Push subscription saved');
         return subscription;
     } catch (e) {
         console.error('Push subscription error:', e);
+        if (e.message && e.message.includes('permission')) {
+            showToast('Push-varsler krever tillatelse', 'info');
+        }
         return null;
     }
 }
@@ -6159,6 +6682,16 @@ function notifySharedRecipe(fromName, recipeName) {
         '🎁 Ny oppskrift delt',
         `${fromName} delte "${recipeName}" med deg!`,
         { type: 'sharedRecipe' }
+    );
+}
+
+// Notify about shared cookbook
+function notifySharedCookbook(fromName, cookbookName) {
+    if (!state.settings.shareNotifications) return;
+    sendPushNotification(
+        '📚 Ny kokebok delt',
+        `${fromName} delte "${cookbookName}" med deg!`,
+        { type: 'sharedCookbook' }
     );
 }
 

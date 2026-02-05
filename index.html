@@ -466,10 +466,14 @@
                 <div class="view-header">
                     <button class="back-btn" data-view="dashboardView">← Tilbake</button>
                     <h2>📚 Mine Kokebøker</h2>
+                    <div class="view-actions">
+                        <button id="importBookBtn" class="icon-btn" title="Importer kokebok">📥</button>
+                    </div>
                 </div>
                 <div id="allBooksList" class="books-list">
                     <!-- All books rendered here -->
                 </div>
+                <input type="file" id="importBookFileInput" accept=".json,.kokebok" style="display: none;">
             </section>
 
             <!-- Book View -->

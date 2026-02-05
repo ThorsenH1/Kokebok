@@ -35,5 +35,22 @@ service cloud.firestore {
       allow delete: if request.auth != null && 
         (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
     }
+    
+      // ===== SHARED COOKBOOKS (TOP LEVEL) =====
+      // Allows sharing cookbooks between users
+      match /sharedCookbooks/{shareId} {
+        // Anyone authenticated can create a share (to send a cookbook)
+        allow create: if request.auth != null;
+        // Can read if you are sender or recipient
+        allow read: if request.auth != null && (
+          resource.data.fromUid == request.auth.uid ||
+          resource.data.toUid == request.auth.uid
+        );
+        // Can update/delete if you are sender or recipient
+        allow update, delete: if request.auth != null && (
+          resource.data.fromUid == request.auth.uid ||
+          resource.data.toUid == request.auth.uid
+        );
+      }
   }
 }

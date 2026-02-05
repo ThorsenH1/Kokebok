@@ -50,8 +50,16 @@ service cloud.firestore {
       }
       
       // v4.0 - Social features
+      // Friends collection - CRITICAL: Allow other users to add themselves as friends
+      // This is needed when someone accepts a friend request
       match /friends/{friendId} {
-        allow read, write: if isOwner(userId);
+        // Owner can read/write their own friends list
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+        // Allow ANY authenticated user to CREATE a friend entry
+        // This enables two-way friendship when accepting requests
+        // The friendUid field should match the auth user when creating
+        allow create: if isAuth() && request.resource.data.friendUid == request.auth.uid;
       }
       
       match /sharedRecipes/{shareId} {
@@ -91,6 +99,23 @@ service cloud.firestore {
     // Allows sharing recipes between users
     match /sharedRecipes/{shareId} {
       // Anyone authenticated can create a share (to send a recipe)
+      allow create: if isAuth();
+      // Can read if you are sender or recipient
+      allow read: if isAuth() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+      // Can update/delete if you are sender or recipient
+      allow update, delete: if isAuth() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+    }
+
+    // ===== SHARED COOKBOOKS (TOP LEVEL) =====
+    // Allows sharing cookbooks between users
+    match /sharedCookbooks/{shareId} {
+      // Anyone authenticated can create a share (to send a cookbook)
       allow create: if isAuth();
       // Can read if you are sender or recipient
       allow read: if isAuth() && (
