@@ -1,13 +1,128 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can only read and write their own data
-    // Each user has their own document with subcollections
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    
+    // ===== HELPER FUNCTIONS =====
+    
+    // Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
     }
     
-    // Deny all other access
+    // Check if user owns this resource
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+    
+    // Check if users are friends
+    function areFriends(userId1, userId2) {
+      return exists(/databases/$(database)/documents/users/$(userId1)/friends/$(userId2)) ||
+             exists(/databases/$(database)/documents/users/$(userId2)/friends/$(userId1));
+    }
+    
+    // Check if profile is public
+    function isProfilePublic(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)/settings/profile).data.profilePublic == true;
+    }
+    
+    // ===== USER DATA =====
+    
+    // Users can only read and write their own data
+    match /users/{userId} {
+      // Allow users to read their own document
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+      
+      // Private data - only owner can access
+      match /recipes/{recipeId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /books/{bookId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /categories/{categoryId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /settings/{settingId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // v4.1 - Equipment collection
+      match /equipment/{equipmentId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // v4.1 - Pantry collection
+      match /pantry/{pantryId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // v4.0 - Social features
+      
+      // Friends list - owner can manage, friends can read names
+      match /friends/{friendId} {
+        allow read, write: if isOwner(userId);
+        // Allow friend to read if they are the friendId
+        allow read: if isAuth() && request.auth.uid == friendId;
+      }
+      
+      // Friend requests - owner can manage
+      match /friendRequests/{requestId} {
+        allow read, write: if isOwner(userId);
+        // Allow anyone authenticated to CREATE a friend request (to send request)
+        allow create: if isAuth();
+      }
+      
+      // Shared recipes - owner can manage, recipient can read
+      match /sharedRecipes/{shareId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // Received recipes from friends
+      match /receivedRecipes/{recipeId} {
+        allow read, write: if isOwner(userId);
+        // Allow friends to CREATE (send recipes)
+        allow create: if isAuth() && areFriends(userId, request.auth.uid);
+      }
+      
+      // Public profile data - readable by friends or if public
+      match /publicProfile/{docId} {
+        allow read: if isAuth() && (
+          isOwner(userId) || 
+          areFriends(userId, request.auth.uid) ||
+          isProfilePublic(userId)
+        );
+        allow write: if isOwner(userId);
+      }
+    }
+    
+    // ===== PUBLIC LEADERBOARD =====
+    
+    // Leaderboard - readable by all authenticated users
+    match /leaderboard/{userId} {
+      // Anyone authenticated can read leaderboard
+      allow read: if isAuth();
+      // Only the user can write their own leaderboard entry
+      allow write: if isOwner(userId);
+    }
+    
+    // ===== PUBLIC PROFILES INDEX =====
+    
+    // Public user lookup by email (for finding friends)
+    match /publicUsers/{email} {
+      // Anyone authenticated can read to find users
+      allow read: if isAuth();
+      // Only the owner can write their own entry
+      allow write: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
+    }
+    
+    // ===== DENY ALL OTHER ACCESS =====
+    
+    // Catch-all deny rule
     match /{document=**} {
       allow read, write: if false;
     }

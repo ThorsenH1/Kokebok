@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=4.0.0">
+    <link rel="stylesheet" href="style.css?v=4.1.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -232,6 +232,29 @@
                         </div>
                     </div>
                     <span class="social-arrow">→</span>
+                </div>
+
+                <!-- Kitchen Card (v4.1) -->
+                <div id="kitchenCard" class="kitchen-card" onclick="openEquipmentPanel()">
+                    <div class="kitchen-card-header">
+                        <span class="kitchen-icon">🏠</span>
+                        <span class="kitchen-title">Mitt Kjøkken</span>
+                    </div>
+                    <div class="kitchen-card-stats">
+                        <div class="kitchen-stat">
+                            <span class="kitchen-stat-value" id="equipmentCount">0</span>
+                            <span class="kitchen-stat-label">utstyr</span>
+                        </div>
+                        <div class="kitchen-stat">
+                            <span class="kitchen-stat-value" id="pantryCount">0</span>
+                            <span class="kitchen-stat-label">varer</span>
+                        </div>
+                        <div class="kitchen-stat-alert" id="expiryAlertBadge" style="display: none;">
+                            <span>⏰</span>
+                            <span id="expiryAlertCount">0</span>
+                        </div>
+                    </div>
+                    <span class="kitchen-arrow">→</span>
                 </div>
 
                 <!-- Categories Section -->
@@ -585,6 +608,14 @@
                     <div class="settings-section">
                         <h3>🔔 Varsler</h3>
                         <div class="setting-item">
+                            <span class="setting-label">Push-varsler</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="pushNotificationsToggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="setting-hint">Motta varsler selv når appen er lukket</p>
+                        <div class="setting-item">
                             <span class="setting-label">Timer-varsler</span>
                             <label class="toggle">
                                 <input type="checkbox" id="timerNotificationsToggle" checked>
@@ -598,6 +629,22 @@
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
+                        <div class="setting-item">
+                            <span class="setting-label">Vennehendelser</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="friendNotificationsToggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="setting-hint">Varsler når venner sender oppskrifter eller forespørsler</p>
+                        <div class="setting-item">
+                            <span class="setting-label">Utløpsvarsler</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="expiryNotificationsToggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="setting-hint">Varsler når varer i matkammeret snart utløper</p>
                     </div>
 
                     <div class="settings-section">
@@ -628,7 +675,7 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v4.0.0</p>
+                        <p class="app-version">Familiens Kokebok v4.1.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
                         <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">100% privat - ingen AI lærer av dine oppskrifter</p>
                     </div>
@@ -742,6 +789,24 @@
                         </button>
                         <button class="menu-item" onclick="openBudgetPlanner(); toggleSideMenu(false);">
                             <span>💵</span> Ukesbudsjett
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Mitt kjøkken - sammenleggbar -->
+                <div class="menu-section collapsible" data-section="kitchen">
+                    <div class="menu-section-header" onclick="toggleMenuSection('kitchen')">
+                        <span class="menu-section-title">🏠 Mitt Kjøkken</span>
+                        <span class="menu-section-arrow">▼</span>
+                    </div>
+                    <div class="menu-section-content">
+                        <button class="menu-item" onclick="openEquipmentPanel(); toggleSideMenu(false);">
+                            <span>🔧</span> Utstyr
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                        <button class="menu-item" onclick="openPantryTracker(); toggleSideMenu(false);">
+                            <span>🫙</span> Matkammer
+                            <span class="menu-badge new">NY</span>
                         </button>
                     </div>
                 </div>
