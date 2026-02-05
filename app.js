@@ -1,5 +1,5 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v4.2.0
+// FAMILIENS KOKEBOK APP v4.5.3
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
 // 100% privat - ingen AI lærer av dine oppskrifter
@@ -220,15 +220,6 @@ function viewRecipe(recipeId) {
     navigateTo('recipeView');
 }
 window.viewRecipe = viewRecipe;
-
-// Close any open modal
-function closeGenericModal() {
-    const modal = $('modalContainer');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-window.closeGenericModal = closeGenericModal;
 
 // ===== Firestore Helpers =====
 function userDoc(collection) {
@@ -843,7 +834,10 @@ async function testGeminiConnection() {
             const errorData = await response.json().catch(() => ({}));
             const errorMsg = errorData.error?.message || 'Ukjent feil';
             
-            if (response.status === 400 && errorMsg.includes('API key')) {
+            if (response.status === 429) {
+                // Rate limit exceeded
+                showToast('⚠️ Gratis kvote brukt opp. Vent litt eller oppgrader til betalt plan på ai.google.dev', 'warning');
+            } else if (response.status === 400 && errorMsg.includes('API key')) {
                 showToast('❌ Ugyldig Gemini API-nøkkel', 'error');
             } else if (response.status === 403) {
                 showToast('❌ API-nøkkel har ikke tilgang til Gemini', 'error');
@@ -1975,6 +1969,7 @@ async function shareRecipe() {
     
     showModal(`📤 Del "${recipe.name}"`, html, []);
 }
+window.shareRecipe = shareRecipe;
 
 async function shareExternal() {
     if (!state.currentRecipe) return;
@@ -3700,21 +3695,6 @@ function clearCheckedItems() {
     showToast('Avkryssede varer fjernet', 'success');
 }
 
-async function shareShoppingList() {
-    const items = state.shoppingList.map(item => `${item.checked ? '✓' : '☐'} ${item.text}`).join('\n');
-    const text = `🛒 Handleliste:\n\n${items}`;
-    
-    if (navigator.share) {
-        try {
-            await navigator.share({ title: 'Handleliste', text });
-        } catch (e) {
-            copyToClipboard(text);
-        }
-    } else {
-        copyToClipboard(text);
-    }
-}
-
 async function saveShoppingList() {
     try {
         await saveToFirestore('settings', 'shoppingList', { data: state.shoppingList });
@@ -3931,11 +3911,11 @@ function setupPortionCalculatorEvents() {
     
     if (closeBtn) closeBtn.onclick = closePortionCalculator;
     if (overlay) overlay.onclick = closePortionCalculator;
-    if (minusBtn) minusBtn.onclick = () => adjustPortions(-1);
-    if (plusBtn) plusBtn.onclick = () => adjustPortions(1);
+    if (minusBtn) minusBtn.onclick = () => adjustPortionsModal(-1);
+    if (plusBtn) plusBtn.onclick = () => adjustPortionsModal(1);
 }
 
-function adjustPortions(delta) {
+function adjustPortionsModal(delta) {
     const originalInput = $('originalPortions');
     const newInput = $('newPortions');
     
@@ -4116,7 +4096,7 @@ function showToast(message, type = 'info') {
 }
 
 // ===== GENERIC MODAL FUNCTION =====
-function showModal(title, content, buttons = []) {
+function showModal(title, content, buttons = [], options = {}) {
     // Remove existing modal
     const existing = document.querySelector('.generic-modal-overlay');
     if (existing) existing.remove();
@@ -4135,8 +4115,11 @@ function showModal(title, content, buttons = []) {
         </div>`;
     }
     
+    // Apply custom width if provided
+    const modalStyle = options.width ? `style="max-width: ${options.width};"` : '';
+    
     overlay.innerHTML = `
-        <div class="generic-modal">
+        <div class="generic-modal" ${modalStyle}>
             <div class="modal-header">
                 <h2>${title}</h2>
                 <button class="close-btn" onclick="closeGenericModal()">×</button>
@@ -4170,13 +4153,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAuth();
     requestNotificationPermission();
 });
-
-// Request notification permission for timer
-function requestNotificationPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-    }
-}
 
 // Load extra settings after user login
 async function loadExtraSettings() {
@@ -4234,111 +4210,6 @@ function getRandomRecipe() {
     navigateTo('recipeView');
     
     showToast(`🎲 Forslag: ${recipe.name}!`, 'success');
-}
-
-// ===== RECIPE RATING SYSTEM =====
-async function rateRecipe(recipeId, rating) {
-    const recipe = state.recipes.find(r => r.id === recipeId);
-    if (!recipe) return;
-    
-    recipe.rating = rating;
-    await saveToFirestore('recipes', recipeId, { rating });
-    
-    showToast(`⭐ ${rating}/5 stjerner!`, 'success');
-    
-    if (state.currentView === 'recipeView') {
-        renderRecipeView();
-    }
-}
-
-// ===== COOKING MODE (Fullscreen step-by-step) =====
-function startCookingMode() {
-    if (!state.currentRecipe) return;
-    
-    const recipe = state.currentRecipe;
-    const steps = recipe.instructions?.split('\n').filter(s => s.trim()) || [];
-    
-    if (steps.length === 0) {
-        showToast('Ingen fremgangsmåte å vise', 'warning');
-        return;
-    }
-    
-    // Create cooking mode overlay
-    const overlay = document.createElement('div');
-    overlay.id = 'cookingModeOverlay';
-    overlay.className = 'cooking-mode-overlay';
-    
-    let currentStep = 0;
-    
-    const renderStep = () => {
-        overlay.innerHTML = `
-            <div class="cooking-mode-content">
-                <div class="cooking-mode-header">
-                    <h2>👨‍🍳 ${escapeHtml(recipe.name)}</h2>
-                    <button class="cooking-mode-close" onclick="exitCookingMode()">✕</button>
-                </div>
-                <div class="cooking-mode-step-indicator">
-                    Steg ${currentStep + 1} av ${steps.length}
-                </div>
-                <div class="cooking-mode-progress">
-                    <div class="cooking-mode-progress-fill" style="width: ${((currentStep + 1) / steps.length) * 100}%"></div>
-                </div>
-                <div class="cooking-mode-instruction">
-                    ${escapeHtml(steps[currentStep])}
-                </div>
-                <div class="cooking-mode-nav">
-                    <button class="cooking-mode-btn" ${currentStep === 0 ? 'disabled' : ''} onclick="cookingModePrev()">
-                        ◀ Forrige
-                    </button>
-                    <button class="cooking-mode-timer-btn" onclick="openTimer()">
-                        ⏱️ Timer
-                    </button>
-                    ${currentStep === steps.length - 1 
-                        ? `<button class="cooking-mode-btn done" onclick="exitCookingMode(); triggerConfetti(); showToast('🎉 Gratulerer! Måltidet er ferdig!', 'success');">
-                            ✓ Ferdig!
-                        </button>`
-                        : `<button class="cooking-mode-btn" onclick="cookingModeNext()">
-                            Neste ▶
-                        </button>`
-                    }
-                </div>
-            </div>
-        `;
-    };
-    
-    window.cookingModePrev = () => {
-        if (currentStep > 0) {
-            currentStep--;
-            renderStep();
-        }
-    };
-    
-    window.cookingModeNext = () => {
-        if (currentStep < steps.length - 1) {
-            currentStep++;
-            renderStep();
-        }
-    };
-    
-    window.exitCookingMode = () => {
-        overlay.remove();
-        // Wake lock release
-        if (window.wakeLock) {
-            window.wakeLock.release();
-        }
-    };
-    
-    renderStep();
-    document.body.appendChild(overlay);
-    
-    // Keep screen on during cooking
-    if ('wakeLock' in navigator) {
-        navigator.wakeLock.request('screen').then(lock => {
-            window.wakeLock = lock;
-        }).catch(() => {});
-    }
-    
-    showToast('👨‍🍳 Kokmodus aktivert!', 'success');
 }
 
 // ===== NUTRITION ESTIMATOR =====
@@ -4437,63 +4308,6 @@ async function addCookingTip() {
     await saveToFirestore('recipes', recipe.id, { tips: recipe.tips });
     renderRecipeView();
     showToast('💡 Tips lagt til!', 'success');
-}
-
-// ===== PRINT RECIPE =====
-function printRecipe() {
-    if (!state.currentRecipe) return;
-    
-    const recipe = state.currentRecipe;
-    const category = state.categories.find(c => c.id === recipe.category);
-    
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>${escapeHtml(recipe.name)} - Familiens Kokebok</title>
-            <style>
-                body { font-family: Georgia, serif; max-width: 700px; margin: 40px auto; padding: 20px; }
-                h1 { color: #8B4513; border-bottom: 2px solid #D2691E; padding-bottom: 10px; }
-                .meta { color: #666; font-style: italic; margin-bottom: 20px; }
-                h2 { color: #A0522D; margin-top: 30px; }
-                .ingredients { background: #FFF8DC; padding: 15px; border-radius: 8px; }
-                .ingredients pre { margin: 0; white-space: pre-wrap; font-family: inherit; }
-                .instructions { line-height: 1.8; }
-                .instructions pre { white-space: pre-wrap; font-family: inherit; }
-                .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #888; font-size: 12px; }
-                @media print { body { margin: 0; } }
-            </style>
-        </head>
-        <body>
-            <h1>${escapeHtml(recipe.name)}</h1>
-            <div class="meta">
-                ${category ? category.icon + ' ' + category.name : ''} 
-                ${recipe.servings ? ' • 👥 ' + escapeHtml(recipe.servings) : ''}
-                ${recipe.prepTime ? ' • ⏱️ ' + escapeHtml(recipe.prepTime) : ''}
-            </div>
-            
-            ${recipe.ingredients ? `
-                <h2>🥄 Ingredienser</h2>
-                <div class="ingredients"><pre>${escapeHtml(recipe.ingredients)}</pre></div>
-            ` : ''}
-            
-            ${recipe.instructions ? `
-                <h2>👩‍🍳 Fremgangsmåte</h2>
-                <div class="instructions"><pre>${escapeHtml(recipe.instructions)}</pre></div>
-            ` : ''}
-            
-            ${recipe.notes ? `
-                <h2>📝 Notater</h2>
-                <p>${escapeHtml(recipe.notes)}</p>
-            ` : ''}
-            
-            <div class="footer">Skrevet ut fra Familiens Kokebok • ${new Date().toLocaleDateString('nb-NO')}</div>
-        </body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
 }
 
 // ===== DUPLICATE RECIPE =====
@@ -5318,11 +5132,10 @@ function setupSocialListeners() {
             updateFriendNotificationBadge();
         }, err => console.warn('Friend request listener error:', err.message));
     
-    // Listen for new shared recipes
+    // Listen for new shared recipes (without orderBy to avoid composite index)
     db.collection('sharedRecipes')
         .where('toUid', '==', state.user.uid)
-        .orderBy('sharedAt', 'desc')
-        .limit(20)
+        .limit(50)
         .onSnapshot(snapshot => {
             const changes = snapshot.docChanges();
             const newShares = changes.filter(c => c.type === 'added');
@@ -5332,7 +5145,11 @@ function setupSocialListeners() {
                 showToast(`🎁 ${share.fromName} delte en oppskrift med deg!`, 'success');
             }
             
-            state.sharedRecipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Sort client-side
+            state.sharedRecipes = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .sort((a, b) => (b.sharedAt?.toMillis?.() || 0) - (a.sharedAt?.toMillis?.() || 0))
+                .slice(0, 20);
             updateFriendNotificationBadge();
         }, err => console.warn('Shared recipes listener error:', err.message));
 }
@@ -6107,12 +5924,6 @@ function formatDate(date) {
     return date.toLocaleDateString('nb-NO');
 }
 
-// Close modal helper
-function closeModal() {
-    const modal = $('modalContainer');
-    if (modal) modal.classList.add('hidden');
-}
-
 // Update friend notification badge
 function updateFriendNotificationBadge() {
     const badge = $('friendNotificationBadge');
@@ -6187,6 +5998,7 @@ async function subscribeToPush() {
         // Save subscription to Firestore for server-side notifications
         if (state.user) {
             await db.collection('pushSubscriptions').doc(state.user.uid).set({
+                userId: state.user.uid, // Required by Firebase security rules
                 subscription: JSON.stringify(subscription),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -7901,7 +7713,14 @@ Ikke inkluder noen forklaring eller annen tekst - BARE JSON-arrayet.`
     
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `Gemini API error: ${response.status}`);
+        const errorMsg = errorData.error?.message || `Gemini API error: ${response.status}`;
+        
+        // Check for rate limit / quota exceeded
+        if (response.status === 429 || errorMsg.includes('quota') || errorMsg.includes('rate')) {
+            showToast('⚠️ Gemini gratis kvote brukt opp. Vent noen sekunder og prøv igjen.', 'warning');
+        }
+        
+        throw new Error(errorMsg);
     }
     
     const data = await response.json();
@@ -8685,60 +8504,6 @@ function getWeeklySuggestions() {
     }, 100);
 }
 window.getWeeklySuggestions = getWeeklySuggestions;
-
-// ===== RECIPE COLLECTIONS =====
-function createCollection() {
-    const name = prompt('Navn på samling (f.eks. "Søndagsmiddager", "Kjappe retter"):');
-    if (!name) return;
-    
-    const collections = JSON.parse(localStorage.getItem('kokebok_collections') || '{}');
-    collections[name] = [];
-    localStorage.setItem('kokebok_collections', JSON.stringify(collections));
-    
-    showToast(`Samling "${name}" opprettet!`, 'success');
-}
-
-function addToCollection(recipeId) {
-    const collections = JSON.parse(localStorage.getItem('kokebok_collections') || '{}');
-    const collectionNames = Object.keys(collections);
-    
-    if (collectionNames.length === 0) {
-        showToast('Du har ingen samlinger. Opprett en først!', 'warning');
-        createCollection();
-        return;
-    }
-    
-    const html = `
-        <p>Velg samling:</p>
-        <div class="collections-list">
-            ${collectionNames.map(name => `
-                <button class="collection-btn" data-collection="${escapeHtml(name)}">
-                    📁 ${escapeHtml(name)} (${collections[name].length})
-                </button>
-            `).join('')}
-        </div>
-    `;
-    
-    showModal('📁 Legg til i samling', html, []);
-    
-    setTimeout(() => {
-        document.querySelectorAll('.collection-btn').forEach(btn => {
-            btn.onclick = () => {
-                const collName = btn.dataset.collection;
-                if (!collections[collName].includes(recipeId)) {
-                    collections[collName].push(recipeId);
-                    localStorage.setItem('kokebok_collections', JSON.stringify(collections));
-                    showToast(`Lagt til i "${collName}"!`, 'success');
-                } else {
-                    showToast('Oppskriften er allerede i samlingen', 'info');
-                }
-                closeModal();
-            };
-        });
-    }, 100);
-}
-window.createCollection = createCollection;
-window.addToCollection = addToCollection;
 
 // ===== COOKING HISTORY =====
 function logCookingSession(recipeId) {
@@ -10449,7 +10214,7 @@ function openMeasurementCalculator() {
                     <div class="tool-section">
                         <h5>⚖️ Vekt-konvertering</h5>
                         <div class="tool-row">
-                            <input type="number" id="toolGram" placeholder="1000" value="1000" oninput="convertWeight()">
+                            <input type="number" id="toolGram" placeholder="1000" value="1000" oninput="convertWeightSimple()">
                             <span>g =</span>
                             <input type="number" id="toolHg" readonly>
                             <span>hg =</span>
@@ -10461,7 +10226,7 @@ function openMeasurementCalculator() {
                     <div class="tool-section">
                         <h5>🥛 Volum-konvertering</h5>
                         <div class="tool-row">
-                            <input type="number" id="toolMl" placeholder="1000" value="1000" oninput="convertVolume()">
+                            <input type="number" id="toolMl" placeholder="1000" value="1000" oninput="convertVolumeSimple()">
                             <span>ml =</span>
                             <input type="number" id="toolDl" readonly>
                             <span>dl =</span>
@@ -10473,18 +10238,18 @@ function openMeasurementCalculator() {
                     <div class="tool-section">
                         <h5>🌡️ Temperatur-konvertering</h5>
                         <div class="tool-row">
-                            <input type="number" id="toolCelsius" placeholder="180" value="180" oninput="convertTemp()">
+                            <input type="number" id="toolCelsius" placeholder="180" value="180" oninput="convertTempSimple()">
                             <span>°C =</span>
                             <input type="number" id="toolFahrenheit" readonly>
                             <span>°F</span>
                         </div>
                         <div class="temp-presets">
-                            <button onclick="setTemp(150)">150°C</button>
-                            <button onclick="setTemp(175)">175°C</button>
-                            <button onclick="setTemp(180)">180°C</button>
-                            <button onclick="setTemp(200)">200°C</button>
-                            <button onclick="setTemp(220)">220°C</button>
-                            <button onclick="setTemp(250)">250°C</button>
+                            <button onclick="setTempSimple(150)">150°C</button>
+                            <button onclick="setTempSimple(175)">175°C</button>
+                            <button onclick="setTempSimple(180)">180°C</button>
+                            <button onclick="setTempSimple(200)">200°C</button>
+                            <button onclick="setTempSimple(220)">220°C</button>
+                            <button onclick="setTempSimple(250)">250°C</button>
                         </div>
                     </div>
                     
@@ -10694,31 +10459,31 @@ function updateProduceCalc() {
 }
 window.updateProduceCalc = updateProduceCalc;
 
-function convertWeight() {
+function convertWeightSimple() {
     const gram = parseFloat($('toolGram')?.value) || 0;
     $('toolHg').value = (gram / 100).toFixed(1);
     $('toolKg').value = (gram / 1000).toFixed(3);
 }
-window.convertWeight = convertWeight;
+window.convertWeightSimple = convertWeightSimple;
 
-function convertVolume() {
+function convertVolumeSimple() {
     const ml = parseFloat($('toolMl')?.value) || 0;
     $('toolDl').value = (ml / 100).toFixed(1);
     $('toolL').value = (ml / 1000).toFixed(3);
 }
-window.convertVolume = convertVolume;
+window.convertVolumeSimple = convertVolumeSimple;
 
-function convertTemp() {
+function convertTempSimple() {
     const celsius = parseFloat($('toolCelsius')?.value) || 0;
     $('toolFahrenheit').value = Math.round(celsius * 9/5 + 32);
 }
-window.convertTemp = convertTemp;
+window.convertTempSimple = convertTempSimple;
 
-function setTemp(temp) {
+function setTempSimple(temp) {
     $('toolCelsius').value = temp;
-    convertTemp();
+    convertTempSimple();
 }
-window.setTemp = setTemp;
+window.setTempSimple = setTempSimple;
 
 // ===== AI MEAL PLANNER =====
 const aiMealPreferences = {
@@ -13075,88 +12840,6 @@ function saveWasteLog() {
 }
 window.saveWasteLog = saveWasteLog;
 
-// ===== RECIPE PRINT / EXPORT =====
-function printRecipe() {
-    const recipe = state.currentRecipe;
-    if (!recipe) return;
-    
-    const printWindow = window.open('', '_blank');
-    const ingredients = getIngredientsAsString(recipe.ingredients);
-    
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>${escapeHtml(recipe.name)} - Familiens Kokebok</title>
-            <style>
-                body { font-family: Georgia, serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-                h1 { color: #8B4513; border-bottom: 2px solid #8B4513; padding-bottom: 10px; }
-                .meta { color: #666; margin-bottom: 20px; }
-                .section { margin: 20px 0; }
-                .section h2 { color: #5D3A1A; font-size: 1.2em; }
-                pre { white-space: pre-wrap; font-family: inherit; }
-                .source { font-style: italic; color: #888; }
-                @media print { 
-                    body { margin: 0; }
-                    .no-print { display: none; }
-                }
-            </style>
-        </head>
-        <body>
-            <h1>${escapeHtml(recipe.name)}</h1>
-            <div class="meta">
-                ${recipe.servings ? `👥 ${escapeHtml(recipe.servings)} porsjoner` : ''}
-                ${recipe.prepTime ? ` • ⏱️ ${escapeHtml(recipe.prepTime)}` : ''}
-            </div>
-            
-            <div class="section">
-                <h2>🥄 Ingredienser</h2>
-                <pre>${escapeHtml(ingredients)}</pre>
-            </div>
-            
-            <div class="section">
-                <h2>👩‍🍳 Fremgangsmåte</h2>
-                <pre>${escapeHtml(recipe.instructions || '')}</pre>
-            </div>
-            
-            ${recipe.notes ? `
-                <div class="section">
-                    <h2>📝 Notater</h2>
-                    <p>${escapeHtml(recipe.notes)}</p>
-                </div>
-            ` : ''}
-            
-            ${recipe.source ? `<p class="source">Kilde: ${escapeHtml(recipe.source)}</p>` : ''}
-            
-            <p class="source">Utskrift fra Familiens Kokebok</p>
-            
-            <button class="no-print" onclick="window.print()">🖨️ Skriv ut</button>
-        </body>
-        </html>
-    `);
-    printWindow.document.close();
-}
-window.printRecipe = printRecipe;
-
-function shareRecipe() {
-    const recipe = state.currentRecipe;
-    if (!recipe) return;
-    
-    const text = `${recipe.name}\n\nIngredienser:\n${getIngredientsAsString(recipe.ingredients)}\n\nFremgangsmåte:\n${recipe.instructions || ''}\n\nDelt fra Familiens Kokebok`;
-    
-    if (navigator.share) {
-        navigator.share({
-            title: recipe.name,
-            text: text
-        }).catch(console.error);
-    } else {
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('Oppskrift kopiert til utklippstavle!', 'success');
-        });
-    }
-}
-window.shareRecipe = shareRecipe;
-
 // ===== QUICK RECIPE MODE (Step-by-step cooking) =====
 let cookingModeActive = false;
 let currentCookingStep = 0;
@@ -13470,39 +13153,39 @@ function openTemperatureConverter() {
             <div class="temp-input-group">
                 <div class="temp-input">
                     <label>Celsius</label>
-                    <input type="number" id="celsiusInput" placeholder="°C" oninput="convertTemp('c')">
+                    <input type="number" id="celsiusInput" placeholder="°C" oninput="convertTempBidirectional('c')">
                 </div>
                 <span class="temp-arrow">⇄</span>
                 <div class="temp-input">
                     <label>Fahrenheit</label>
-                    <input type="number" id="fahrenheitInput" placeholder="°F" oninput="convertTemp('f')">
+                    <input type="number" id="fahrenheitInput" placeholder="°F" oninput="convertTempBidirectional('f')">
                 </div>
             </div>
             
             <div class="temp-presets">
                 <h4>Vanlige ovnstemperaturer:</h4>
                 <div class="temp-preset-grid">
-                    <div class="temp-preset" onclick="setTemp(150)">
+                    <div class="temp-preset" onclick="setTempBidirectional(150)">
                         <span class="temp-c">150°C</span>
                         <span class="temp-f">300°F</span>
                         <span class="temp-desc">Lav</span>
                     </div>
-                    <div class="temp-preset" onclick="setTemp(175)">
+                    <div class="temp-preset" onclick="setTempBidirectional(175)">
                         <span class="temp-c">175°C</span>
                         <span class="temp-f">350°F</span>
                         <span class="temp-desc">Middels</span>
                     </div>
-                    <div class="temp-preset" onclick="setTemp(200)">
+                    <div class="temp-preset" onclick="setTempBidirectional(200)">
                         <span class="temp-c">200°C</span>
                         <span class="temp-f">400°F</span>
                         <span class="temp-desc">Høy</span>
                     </div>
-                    <div class="temp-preset" onclick="setTemp(220)">
+                    <div class="temp-preset" onclick="setTempBidirectional(220)">
                         <span class="temp-c">220°C</span>
                         <span class="temp-f">425°F</span>
                         <span class="temp-desc">Veldig høy</span>
                     </div>
-                    <div class="temp-preset" onclick="setTemp(250)">
+                    <div class="temp-preset" onclick="setTempBidirectional(250)">
                         <span class="temp-c">250°C</span>
                         <span class="temp-f">480°F</span>
                         <span class="temp-desc">Maks</span>
@@ -13521,7 +13204,7 @@ function openTemperatureConverter() {
 }
 window.openTemperatureConverter = openTemperatureConverter;
 
-function convertTemp(from) {
+function convertTempBidirectional(from) {
     const celsiusInput = document.getElementById('celsiusInput');
     const fahrenheitInput = document.getElementById('fahrenheitInput');
     
@@ -13537,13 +13220,13 @@ function convertTemp(from) {
         }
     }
 }
-window.convertTemp = convertTemp;
+window.convertTempBidirectional = convertTempBidirectional;
 
-function setTemp(celsius) {
+function setTempBidirectional(celsius) {
     document.getElementById('celsiusInput').value = celsius;
-    convertTemp('c');
+    convertTempBidirectional('c');
 }
-window.setTemp = setTemp;
+window.setTempBidirectional = setTempBidirectional;
 
 // ===== MEAT TEMPERATURE GUIDE =====
 const MEAT_TEMPERATURES = {
@@ -13832,7 +13515,7 @@ function openWinePairing(recipeId = null) {
         `<button class="wine-cat-btn ${selectedCategory === key ? 'active' : ''}" onclick="showWinePairings('${key}')">${data.emoji}<br>${data.name}</button>`
     ).join('');
     
-    openGenericModal('🍷 Vinanbefaling', `
+    showModal('🍷 Vinanbefaling', `
         <div class="wine-pairing-guide">
             <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">
                 Velg mattype for å få vinforslag
@@ -13916,7 +13599,7 @@ const ingredientDensities = {
 };
 
 function openKitchenCalculator() {
-    openGenericModal('🧮 Kjøkken-kalkulator', `
+    showModal('🧮 Kjøkken-kalkulator', `
         <div class="kitchen-calculator">
             <div class="calc-tabs" style="display: flex; gap: 8px; margin-bottom: 16px;">
                 <button class="calc-tab active" onclick="showCalcTab('volume')">📏 Volum</button>
@@ -14154,7 +13837,7 @@ function openRecipeCostCalculator(recipeId = null) {
         </div>
     `).join('') || '<p>Velg en oppskrift først</p>';
     
-    openGenericModal('💰 Kostnadskalkulator', `
+    showModal('💰 Kostnadskalkulator', `
         <div class="cost-calculator">
             ${!recipe ? `
                 <select id="costRecipeSelect" onchange="loadRecipeForCost(this.value)" 
@@ -14174,7 +13857,7 @@ function openRecipeCostCalculator(recipeId = null) {
                     <input type="number" id="costPortions" value="${recipe?.servings || 4}" min="1" 
                            style="width: 80px; padding: 8px; text-align: center; border-radius: 8px;">
                 </div>
-                <button onclick="calculateRecipeCost()" class="btn-primary" style="width: 100%; padding: 12px; margin-top: 8px;">
+                <button onclick="calculateManualRecipeCost()" class="btn-primary" style="width: 100%; padding: 12px; margin-top: 8px;">
                     Beregn kostnad
                 </button>
             </div>
@@ -14192,7 +13875,7 @@ function loadRecipeForCost(recipeId) {
 }
 window.loadRecipeForCost = loadRecipeForCost;
 
-function calculateRecipeCost() {
+function calculateManualRecipeCost() {
     const inputs = document.querySelectorAll('.cost-input');
     const portions = parseInt($('costPortions')?.value) || 4;
     
@@ -14217,7 +13900,7 @@ function calculateRecipeCost() {
         `;
     }
 }
-window.calculateRecipeCost = calculateRecipeCost;
+window.calculateManualRecipeCost = calculateManualRecipeCost;
 
 // ===== COOKING PLAYLIST / SPOTIFY INTEGRATION =====
 function openCookingPlaylist() {
@@ -14232,7 +13915,7 @@ function openCookingPlaylist() {
         { name: 'Classical Cooking', mood: '🎻 Klassisk musikk', url: 'https://open.spotify.com/playlist/37i9dQZF1DWWQRwui0ExPn' }
     ];
     
-    openGenericModal('🎵 Kokemusikk', `
+    showModal('🎵 Kokemusikk', `
         <div class="cooking-playlist">
             <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">
                 Velg stemningen for matlagingen!
@@ -14277,7 +13960,7 @@ function shareRecipeWithQR(recipeId) {
     // Generate QR code using a simple API
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}`;
     
-    openGenericModal('📲 Del oppskrift', `
+    showModal('📲 Del oppskrift', `
         <div style="text-align: center;">
             <h3 style="margin-bottom: 16px;">${escapeHtml(recipe.name)}</h3>
             <img src="${qrUrl}" alt="QR Code" style="border-radius: 12px; margin-bottom: 16px;">
@@ -14318,8 +14001,11 @@ function nativeShareRecipe(name, url) {
 window.nativeShareRecipe = nativeShareRecipe;
 
 // ===== RECIPE PRINT MODE =====
-function printRecipe(recipeId) {
-    const recipe = state.recipes.find(r => r.id === recipeId);
+function printRecipe(recipeId = null) {
+    // Support both recipeId parameter and state.currentRecipe
+    const recipe = recipeId 
+        ? state.recipes.find(r => r.id === recipeId)
+        : state.currentRecipe;
     if (!recipe) return;
     
     const printContent = `
@@ -14349,14 +14035,10 @@ function printRecipe(recipeId) {
             ${recipe.description ? `<p><em>${escapeHtml(recipe.description)}</em></p>` : ''}
             
             <h2>📝 Ingredienser</h2>
-            <ul>
-                ${(recipe.ingredients || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}
-            </ul>
+            <div style="white-space: pre-wrap; line-height: 1.8;">${escapeHtml(getIngredientsAsString(recipe.ingredients))}</div>
             
             <h2>👨‍🍳 Fremgangsmåte</h2>
-            <ol>
-                ${(recipe.steps || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}
-            </ol>
+            <div style="white-space: pre-wrap; line-height: 1.8;">${escapeHtml(recipe.instructions || recipe.steps?.join('\n') || 'Ingen fremgangsmåte angitt')}</div>
             
             ${recipe.notes ? `<h2>💡 Notater</h2><p>${escapeHtml(recipe.notes)}</p>` : ''}
             
@@ -14983,7 +14665,7 @@ function openSmartShopping() {
                             </div>
                         `).join('')}
                     </div>
-                    <button class="btn btn-secondary btn-small" onclick="findRecipesWithIngredients(${JSON.stringify(expiringSoon.map(i => i.name))})">
+                    <button class="btn btn-secondary btn-small" onclick="searchRecipesByIngredients(${JSON.stringify(expiringSoon.map(i => i.name))})">
                         🔍 Finn oppskrifter med disse
                     </button>
                 ` : '<p class="no-items">✅ Ingen varer utløper snart</p>'}
@@ -15021,7 +14703,7 @@ function openSmartShopping() {
 }
 window.openSmartShopping = openSmartShopping;
 
-function findRecipesWithIngredients(ingredients) {
+function searchRecipesByIngredients(ingredients) {
     const ingredientsLower = ingredients.map(i => i.toLowerCase());
     
     const matches = state.recipes.filter(recipe => {
@@ -15050,7 +14732,7 @@ function findRecipesWithIngredients(ingredients) {
     
     showModal('🔍 Oppskrifter funnet', html, []);
 }
-window.findRecipesWithIngredients = findRecipesWithIngredients;
+window.searchRecipesByIngredients = searchRecipesByIngredients;
 
 function addAllLowToShopping() {
     const lowItems = (state.pantryItems || []).filter(item => (item.quantity || 1) <= 1);
@@ -15283,5 +14965,5 @@ function showLoginTroubleshoot() {
 }
 
 // Update version
-const APP_VERSION_ULTIMATE = '4.4.0';
+const APP_VERSION_ULTIMATE = '4.5.2';
 console.log(`Familiens Kokebok ${APP_VERSION_ULTIMATE} - Ultimate Premium Features Loaded`);
