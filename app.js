@@ -509,6 +509,10 @@ async function initApp() {
     try {
         await loadAllData();
         await loadExtraSettings();
+        
+        // CRITICAL: Create public profile EARLY so friends can find us
+        await ensurePublicProfile();
+        
         setupEventListeners();
         renderDashboard();
         applySettings();
@@ -555,6 +559,26 @@ async function initApp() {
         // Vis appen selv om det er feil - bruker kan fortsatt bruke den
         renderDashboard();
         showToast('Noen data kunne ikke lastes. Prøv å oppdatere siden.', 'warning');
+    }
+}
+
+// Ensure user has a public profile that others can find
+async function ensurePublicProfile() {
+    if (!state.user) return;
+    
+    try {
+        await db.collection('publicProfiles').doc(state.user.uid).set({
+            uid: state.user.uid,
+            email: state.user.email.toLowerCase(),
+            displayName: state.user.displayName || 'Anonym kokk',
+            photoURL: state.user.photoURL || null,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            isPublic: true
+        }, { merge: true });
+        console.log('✓ Public profile oppdatert');
+    } catch (e) {
+        console.warn('Kunne ikke opprette public profile:', e.message);
     }
 }
 
@@ -799,7 +823,7 @@ async function testGeminiConnection() {
     showToast('🔄 Tester Gemini-tilkobling...', 'info');
     
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -5248,13 +5272,16 @@ async function loadSocialData() {
             .get();
         state.sentRequests = sentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // Load shared recipes
+        // Load shared recipes (without orderBy to avoid needing composite index)
         const sharedSnap = await db.collection('sharedRecipes')
             .where('toUid', '==', state.user.uid)
-            .orderBy('sharedAt', 'desc')
-            .limit(20)
+            .limit(50)
             .get();
-        state.sharedRecipes = sharedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort client-side instead
+        state.sharedRecipes = sharedSnap.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => (b.sharedAt?.toMillis?.() || 0) - (a.sharedAt?.toMillis?.() || 0))
+            .slice(0, 20);
         
         // Update public profile
         await updatePublicProfile();
@@ -7834,7 +7861,7 @@ async function analyzeWithGemini(imageData, apiKey) {
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
     const mimeType = imageData.match(/^data:(image\/\w+);/)?.[1] || 'image/jpeg';
     
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -13855,6 +13882,497 @@ function getWinePairingHtml(category) {
         </div>
     `;
 }
+
+// ===== KITCHEN CONVERSION CALCULATOR =====
+const kitchenConversions = {
+    volume: {
+        'dl': { 'ml': 100, 'liter': 0.1, 'ss': 6.67, 'ts': 20, 'kopp': 0.42 },
+        'ml': { 'dl': 0.01, 'liter': 0.001, 'ss': 0.067, 'ts': 0.2, 'kopp': 0.0042 },
+        'liter': { 'dl': 10, 'ml': 1000, 'ss': 66.7, 'ts': 200, 'kopp': 4.2 },
+        'ss': { 'dl': 0.15, 'ml': 15, 'ts': 3, 'kopp': 0.063 },
+        'ts': { 'dl': 0.05, 'ml': 5, 'ss': 0.33, 'kopp': 0.021 },
+        'kopp': { 'dl': 2.37, 'ml': 237, 'liter': 0.237, 'ss': 16, 'ts': 48 }
+    },
+    weight: {
+        'g': { 'kg': 0.001, 'mg': 1000, 'oz': 0.035, 'lb': 0.0022 },
+        'kg': { 'g': 1000, 'mg': 1000000, 'oz': 35.27, 'lb': 2.2 },
+        'oz': { 'g': 28.35, 'kg': 0.028, 'lb': 0.0625 },
+        'lb': { 'g': 453.6, 'kg': 0.454, 'oz': 16 }
+    },
+    temperature: {
+        'celsius': { 'fahrenheit': (c) => c * 9/5 + 32, 'kelvin': (c) => c + 273.15 },
+        'fahrenheit': { 'celsius': (f) => (f - 32) * 5/9, 'kelvin': (f) => (f - 32) * 5/9 + 273.15 },
+        'kelvin': { 'celsius': (k) => k - 273.15, 'fahrenheit': (k) => (k - 273.15) * 9/5 + 32 }
+    }
+};
+
+// Common ingredient densities (g per dl)
+const ingredientDensities = {
+    'mel': 60, 'hvetemel': 60, 'sukker': 85, 'melis': 50, 'brunt sukker': 90,
+    'smør': 96, 'olje': 92, 'melk': 103, 'fløte': 100, 'rømme': 115,
+    'ris': 95, 'havregryn': 40, 'mandler': 70, 'valnøtter': 50,
+    'honning': 140, 'sirup': 140, 'kakao': 45, 'salt': 120, 'pepper': 50,
+    'parmesan': 50, 'cottage cheese': 115, 'yoghurt': 102
+};
+
+function openKitchenCalculator() {
+    openGenericModal('🧮 Kjøkken-kalkulator', `
+        <div class="kitchen-calculator">
+            <div class="calc-tabs" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <button class="calc-tab active" onclick="showCalcTab('volume')">📏 Volum</button>
+                <button class="calc-tab" onclick="showCalcTab('weight')">⚖️ Vekt</button>
+                <button class="calc-tab" onclick="showCalcTab('temp')">🌡️ Temperatur</button>
+                <button class="calc-tab" onclick="showCalcTab('ingredient')">🥄 Ingrediens</button>
+            </div>
+            
+            <div id="calcTabContent">
+                ${getVolumeCalcHtml()}
+            </div>
+        </div>
+    `, [], { width: '400px' });
+}
+window.openKitchenCalculator = openKitchenCalculator;
+
+function showCalcTab(tab) {
+    document.querySelectorAll('.calc-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    const content = document.getElementById('calcTabContent');
+    if (tab === 'volume') content.innerHTML = getVolumeCalcHtml();
+    else if (tab === 'weight') content.innerHTML = getWeightCalcHtml();
+    else if (tab === 'temp') content.innerHTML = getTempCalcHtml();
+    else if (tab === 'ingredient') content.innerHTML = getIngredientCalcHtml();
+}
+window.showCalcTab = showCalcTab;
+
+function getVolumeCalcHtml() {
+    return `
+        <div class="calc-section">
+            <input type="number" id="volumeAmount" placeholder="Mengde" style="width: 100%; padding: 12px; font-size: 1.2rem; margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <select id="volumeFrom" style="flex: 1; padding: 10px; border-radius: 8px;" onchange="convertVolume()">
+                    <option value="dl">dl (desiliter)</option>
+                    <option value="ml">ml (milliliter)</option>
+                    <option value="liter">liter</option>
+                    <option value="ss">ss (spiseskje)</option>
+                    <option value="ts">ts (teskje)</option>
+                    <option value="kopp">kopp (US)</option>
+                </select>
+                <span style="padding: 10px;">→</span>
+                <select id="volumeTo" style="flex: 1; padding: 10px; border-radius: 8px;" onchange="convertVolume()">
+                    <option value="ml">ml</option>
+                    <option value="dl">dl</option>
+                    <option value="liter">liter</option>
+                    <option value="ss">ss</option>
+                    <option value="ts">ts</option>
+                    <option value="kopp">kopp</option>
+                </select>
+            </div>
+            <button onclick="convertVolume()" class="btn-primary" style="width: 100%; padding: 12px;">Konverter</button>
+            <div id="volumeResult" style="margin-top: 12px; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center; font-size: 1.3rem; font-weight: bold;"></div>
+        </div>
+    `;
+}
+
+function getWeightCalcHtml() {
+    return `
+        <div class="calc-section">
+            <input type="number" id="weightAmount" placeholder="Mengde" style="width: 100%; padding: 12px; font-size: 1.2rem; margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <select id="weightFrom" style="flex: 1; padding: 10px; border-radius: 8px;">
+                    <option value="g">gram</option>
+                    <option value="kg">kilogram</option>
+                    <option value="oz">ounce</option>
+                    <option value="lb">pound</option>
+                </select>
+                <span style="padding: 10px;">→</span>
+                <select id="weightTo" style="flex: 1; padding: 10px; border-radius: 8px;">
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                    <option value="oz">oz</option>
+                    <option value="lb">lb</option>
+                </select>
+            </div>
+            <button onclick="convertWeight()" class="btn-primary" style="width: 100%; padding: 12px;">Konverter</button>
+            <div id="weightResult" style="margin-top: 12px; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center; font-size: 1.3rem; font-weight: bold;"></div>
+        </div>
+    `;
+}
+
+function getTempCalcHtml() {
+    return `
+        <div class="calc-section">
+            <input type="number" id="tempAmount" placeholder="Temperatur" style="width: 100%; padding: 12px; font-size: 1.2rem; margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <select id="tempFrom" style="flex: 1; padding: 10px; border-radius: 8px;">
+                    <option value="celsius">Celsius (°C)</option>
+                    <option value="fahrenheit">Fahrenheit (°F)</option>
+                </select>
+                <span style="padding: 10px;">→</span>
+                <select id="tempTo" style="flex: 1; padding: 10px; border-radius: 8px;">
+                    <option value="fahrenheit">Fahrenheit (°F)</option>
+                    <option value="celsius">Celsius (°C)</option>
+                </select>
+            </div>
+            <button onclick="convertTemp()" class="btn-primary" style="width: 100%; padding: 12px;">Konverter</button>
+            <div id="tempResult" style="margin-top: 12px; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center; font-size: 1.3rem; font-weight: bold;"></div>
+            <div style="margin-top: 12px; font-size: 0.9rem; color: var(--text-secondary);">
+                <p>🔥 Vanlige ovnstemp: 175°C = 350°F, 200°C = 400°F, 225°C = 435°F</p>
+            </div>
+        </div>
+    `;
+}
+
+function getIngredientCalcHtml() {
+    const options = Object.keys(ingredientDensities).map(i => `<option value="${i}">${i}</option>`).join('');
+    return `
+        <div class="calc-section">
+            <p style="margin-bottom: 12px; color: var(--text-secondary);">Konverter mellom volum og vekt for vanlige ingredienser</p>
+            <select id="ingredientSelect" style="width: 100%; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+                ${options}
+            </select>
+            <input type="number" id="ingredientAmount" placeholder="Mengde" style="width: 100%; padding: 12px; font-size: 1.2rem; margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <select id="ingredientFrom" style="flex: 1; padding: 10px; border-radius: 8px;">
+                    <option value="dl">dl</option>
+                    <option value="g">gram</option>
+                </select>
+                <span style="padding: 10px;">→</span>
+                <select id="ingredientTo" style="flex: 1; padding: 10px; border-radius: 8px;">
+                    <option value="g">gram</option>
+                    <option value="dl">dl</option>
+                </select>
+            </div>
+            <button onclick="convertIngredient()" class="btn-primary" style="width: 100%; padding: 12px;">Konverter</button>
+            <div id="ingredientResult" style="margin-top: 12px; padding: 16px; background: var(--bg-tertiary); border-radius: 8px; text-align: center; font-size: 1.3rem; font-weight: bold;"></div>
+        </div>
+    `;
+}
+
+function convertVolume() {
+    const amount = parseFloat($('volumeAmount')?.value);
+    const from = $('volumeFrom')?.value;
+    const to = $('volumeTo')?.value;
+    const result = $('volumeResult');
+    
+    if (!amount || !from || !to || !result) return;
+    
+    if (from === to) {
+        result.innerHTML = `${amount} ${from}`;
+        return;
+    }
+    
+    const factor = kitchenConversions.volume[from]?.[to];
+    if (factor) {
+        const converted = (amount * factor).toFixed(2);
+        result.innerHTML = `${amount} ${from} = <strong>${converted} ${to}</strong>`;
+    }
+}
+window.convertVolume = convertVolume;
+
+function convertWeight() {
+    const amount = parseFloat($('weightAmount')?.value);
+    const from = $('weightFrom')?.value;
+    const to = $('weightTo')?.value;
+    const result = $('weightResult');
+    
+    if (!amount || !from || !to || !result) return;
+    
+    if (from === to) {
+        result.innerHTML = `${amount} ${from}`;
+        return;
+    }
+    
+    const factor = kitchenConversions.weight[from]?.[to];
+    if (factor) {
+        const converted = (amount * factor).toFixed(2);
+        result.innerHTML = `${amount} ${from} = <strong>${converted} ${to}</strong>`;
+    }
+}
+window.convertWeight = convertWeight;
+
+function convertTemp() {
+    const amount = parseFloat($('tempAmount')?.value);
+    const from = $('tempFrom')?.value;
+    const to = $('tempTo')?.value;
+    const result = $('tempResult');
+    
+    if (isNaN(amount) || !from || !to || !result) return;
+    
+    if (from === to) {
+        result.innerHTML = `${amount}°`;
+        return;
+    }
+    
+    const converter = kitchenConversions.temperature[from]?.[to];
+    if (converter) {
+        const converted = converter(amount).toFixed(1);
+        const symbol = to === 'celsius' ? '°C' : to === 'fahrenheit' ? '°F' : 'K';
+        const fromSymbol = from === 'celsius' ? '°C' : from === 'fahrenheit' ? '°F' : 'K';
+        result.innerHTML = `${amount}${fromSymbol} = <strong>${converted}${symbol}</strong>`;
+    }
+}
+window.convertTemp = convertTemp;
+
+function convertIngredient() {
+    const ingredient = $('ingredientSelect')?.value;
+    const amount = parseFloat($('ingredientAmount')?.value);
+    const from = $('ingredientFrom')?.value;
+    const to = $('ingredientTo')?.value;
+    const result = $('ingredientResult');
+    
+    if (!ingredient || !amount || !from || !to || !result) return;
+    
+    const density = ingredientDensities[ingredient]; // g per dl
+    
+    let converted;
+    if (from === 'dl' && to === 'g') {
+        converted = amount * density;
+    } else if (from === 'g' && to === 'dl') {
+        converted = amount / density;
+    } else {
+        result.innerHTML = `${amount} ${from}`;
+        return;
+    }
+    
+    result.innerHTML = `${amount} ${from} ${ingredient} = <strong>${converted.toFixed(1)} ${to}</strong>`;
+}
+window.convertIngredient = convertIngredient;
+
+// ===== RECIPE COST CALCULATOR =====
+function openRecipeCostCalculator(recipeId = null) {
+    let recipe = null;
+    if (recipeId) {
+        recipe = state.recipes.find(r => r.id === recipeId);
+    }
+    
+    const ingredientRows = recipe?.ingredients?.map((ing, i) => `
+        <div class="cost-row" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+            <span style="flex: 2;">${escapeHtml(ing)}</span>
+            <input type="number" class="cost-input" data-index="${i}" placeholder="Pris" 
+                   style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+        </div>
+    `).join('') || '<p>Velg en oppskrift først</p>';
+    
+    openGenericModal('💰 Kostnadskalkulator', `
+        <div class="cost-calculator">
+            ${!recipe ? `
+                <select id="costRecipeSelect" onchange="loadRecipeForCost(this.value)" 
+                        style="width: 100%; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                    <option value="">Velg oppskrift...</option>
+                    ${state.recipes.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}
+                </select>
+            ` : `<h3 style="margin-bottom: 16px;">${escapeHtml(recipe.name)}</h3>`}
+            
+            <div id="costIngredients">
+                ${ingredientRows}
+            </div>
+            
+            <div style="margin-top: 16px; padding: 16px; background: var(--bg-tertiary); border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Antall porsjoner:</span>
+                    <input type="number" id="costPortions" value="${recipe?.servings || 4}" min="1" 
+                           style="width: 80px; padding: 8px; text-align: center; border-radius: 8px;">
+                </div>
+                <button onclick="calculateRecipeCost()" class="btn-primary" style="width: 100%; padding: 12px; margin-top: 8px;">
+                    Beregn kostnad
+                </button>
+            </div>
+            
+            <div id="costResult" style="margin-top: 16px; display: none; padding: 20px; background: linear-gradient(135deg, var(--accent-color), var(--accent-secondary)); border-radius: 12px; color: white; text-align: center;">
+            </div>
+        </div>
+    `, [], { width: '450px' });
+}
+window.openRecipeCostCalculator = openRecipeCostCalculator;
+
+function loadRecipeForCost(recipeId) {
+    if (!recipeId) return;
+    openRecipeCostCalculator(recipeId);
+}
+window.loadRecipeForCost = loadRecipeForCost;
+
+function calculateRecipeCost() {
+    const inputs = document.querySelectorAll('.cost-input');
+    const portions = parseInt($('costPortions')?.value) || 4;
+    
+    let total = 0;
+    inputs.forEach(input => {
+        const price = parseFloat(input.value) || 0;
+        total += price;
+    });
+    
+    const perPortion = total / portions;
+    const result = $('costResult');
+    
+    if (result) {
+        result.style.display = 'block';
+        result.innerHTML = `
+            <div style="font-size: 2rem; font-weight: bold; margin-bottom: 8px;">${formatCurrency(total)}</div>
+            <div style="font-size: 1rem; opacity: 0.9;">Total kostnad</div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3);">
+                <div style="font-size: 1.5rem; font-weight: bold;">${formatCurrency(perPortion)}</div>
+                <div style="font-size: 0.9rem; opacity: 0.9;">per porsjon (${portions} stk)</div>
+            </div>
+        `;
+    }
+}
+window.calculateRecipeCost = calculateRecipeCost;
+
+// ===== COOKING PLAYLIST / SPOTIFY INTEGRATION =====
+function openCookingPlaylist() {
+    const playlists = [
+        { name: 'Italian Dinner', mood: '🇮🇹 Italiensk middag', url: 'https://open.spotify.com/playlist/37i9dQZF1DX6ThddIjWuGT' },
+        { name: 'Sunday Brunch', mood: '☀️ Søndagsbrunch', url: 'https://open.spotify.com/playlist/37i9dQZF1DWVkpjcLfcMvH' },
+        { name: 'Cooking Jazz', mood: '🎷 Jazz i kjøkkenet', url: 'https://open.spotify.com/playlist/37i9dQZF1DX4wta20PHgwo' },
+        { name: 'French Café', mood: '🥐 Fransk kaféstemning', url: 'https://open.spotify.com/playlist/37i9dQZF1DX5xiztvBdlUf' },
+        { name: 'Dinner Party', mood: '🥂 Middagsselskap', url: 'https://open.spotify.com/playlist/37i9dQZF1DX4xuWVBs4FgJ' },
+        { name: 'Acoustic Cooking', mood: '🎸 Akustisk stemning', url: 'https://open.spotify.com/playlist/37i9dQZF1DX4E3UdUs7fUx' },
+        { name: 'Latin Kitchen', mood: '💃 Latinamerikansk', url: 'https://open.spotify.com/playlist/37i9dQZF1DX10zKzsJ2jva' },
+        { name: 'Classical Cooking', mood: '🎻 Klassisk musikk', url: 'https://open.spotify.com/playlist/37i9dQZF1DWWQRwui0ExPn' }
+    ];
+    
+    openGenericModal('🎵 Kokemusikk', `
+        <div class="cooking-playlist">
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">
+                Velg stemningen for matlagingen!
+            </p>
+            <div class="playlist-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                ${playlists.map(p => `
+                    <a href="${p.url}" target="_blank" rel="noopener noreferrer" 
+                       class="playlist-card" style="display: block; padding: 16px; background: var(--card-bg); border-radius: 12px; text-decoration: none; color: inherit; border: 1px solid var(--border-color); transition: transform 0.2s, box-shadow 0.2s;"
+                       onmouseover="this.style.transform='scale(1.03)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)';"
+                       onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none';">
+                        <div style="font-size: 1.5rem; margin-bottom: 8px;">${p.mood.split(' ')[0]}</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">${p.name}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">${p.mood}</div>
+                    </a>
+                `).join('')}
+            </div>
+            <p style="text-align: center; color: var(--text-tertiary); font-size: 0.85rem; margin-top: 16px;">
+                🎧 Åpnes i Spotify
+            </p>
+        </div>
+    `, [], { width: '450px' });
+}
+window.openCookingPlaylist = openCookingPlaylist;
+
+// ===== QUICK RECIPE SHARING (QR Code) =====
+function shareRecipeWithQR(recipeId) {
+    const recipe = state.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    
+    // Create shareable data
+    const shareData = {
+        n: recipe.name,
+        i: recipe.ingredients?.slice(0, 10),
+        s: recipe.steps?.slice(0, 10),
+        p: recipe.servings,
+        t: recipe.prepTime
+    };
+    
+    const encoded = btoa(encodeURIComponent(JSON.stringify(shareData)));
+    const shareUrl = `${window.location.origin}${window.location.pathname}?recipe=${encoded}`;
+    
+    // Generate QR code using a simple API
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}`;
+    
+    openGenericModal('📲 Del oppskrift', `
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 16px;">${escapeHtml(recipe.name)}</h3>
+            <img src="${qrUrl}" alt="QR Code" style="border-radius: 12px; margin-bottom: 16px;">
+            <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                Skann QR-koden for å dele oppskriften
+            </p>
+            <div style="display: flex; gap: 8px; justify-content: center;">
+                <button onclick="copyRecipeLink('${shareUrl}')" class="btn-secondary" style="padding: 12px 20px;">
+                    📋 Kopier lenke
+                </button>
+                <button onclick="nativeShareRecipe('${escapeHtml(recipe.name)}', '${shareUrl}')" class="btn-primary" style="padding: 12px 20px;">
+                    📤 Del
+                </button>
+            </div>
+        </div>
+    `, [], { width: '350px' });
+}
+window.shareRecipeWithQR = shareRecipeWithQR;
+
+function copyRecipeLink(url) {
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('📋 Lenke kopiert!', 'success');
+    });
+}
+window.copyRecipeLink = copyRecipeLink;
+
+function nativeShareRecipe(name, url) {
+    if (navigator.share) {
+        navigator.share({
+            title: name,
+            text: `Sjekk ut denne oppskriften: ${name}`,
+            url: url
+        });
+    } else {
+        copyRecipeLink(url);
+    }
+}
+window.nativeShareRecipe = nativeShareRecipe;
+
+// ===== RECIPE PRINT MODE =====
+function printRecipe(recipeId) {
+    const recipe = state.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    
+    const printContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${recipe.name} - Familiens Kokebok</title>
+            <style>
+                body { font-family: Georgia, serif; max-width: 700px; margin: 40px auto; padding: 20px; color: #333; }
+                h1 { font-size: 2rem; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                .meta { color: #666; margin-bottom: 20px; }
+                h2 { font-size: 1.3rem; margin-top: 24px; color: #555; }
+                ul, ol { line-height: 1.8; }
+                li { margin-bottom: 8px; }
+                .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 0.9rem; color: #888; }
+                @media print { body { margin: 20px; } }
+            </style>
+        </head>
+        <body>
+            <h1>🍳 ${escapeHtml(recipe.name)}</h1>
+            <div class="meta">
+                ${recipe.servings ? `👥 ${recipe.servings} porsjoner` : ''}
+                ${recipe.prepTime ? ` • ⏱️ ${recipe.prepTime} min` : ''}
+                ${recipe.category ? ` • 📁 ${escapeHtml(recipe.category)}` : ''}
+            </div>
+            
+            ${recipe.description ? `<p><em>${escapeHtml(recipe.description)}</em></p>` : ''}
+            
+            <h2>📝 Ingredienser</h2>
+            <ul>
+                ${(recipe.ingredients || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}
+            </ul>
+            
+            <h2>👨‍🍳 Fremgangsmåte</h2>
+            <ol>
+                ${(recipe.steps || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+            </ol>
+            
+            ${recipe.notes ? `<h2>💡 Notater</h2><p>${escapeHtml(recipe.notes)}</p>` : ''}
+            
+            <div class="footer">
+                <p>Skrevet ut fra Familiens Kokebok • ${new Date().toLocaleDateString('nb-NO')}</p>
+            </div>
+        </body>
+        </html>
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
+}
+window.printRecipe = printRecipe;
 
 // ===== RECIPE RATING SYSTEM =====
 function rateRecipe(recipeId) {

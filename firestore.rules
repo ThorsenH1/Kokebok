@@ -130,8 +130,10 @@ service cloud.firestore {
     
     // ===== PUSH SUBSCRIPTIONS =====
     match /pushSubscriptions/{subId} {
-      allow read, write: if isAuth() && resource.data.userId == request.auth.uid;
-      allow create: if isAuth();
+      // Allow create with userId matching auth
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      // Allow read/update/delete if userId matches
+      allow read, update, delete: if isAuth() && resource.data.userId == request.auth.uid;
     }
   }
 }
