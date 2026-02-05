@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=4.1.0">
+    <link rel="stylesheet" href="style.css?v=4.2.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -648,7 +648,34 @@
                     </div>
 
                     <div class="settings-section">
-                        <h3>� Sosiale innstillinger</h3>
+                        <h3>🤖 AI-innstillinger</h3>
+                        <div class="setting-item">
+                            <span class="setting-label">Auto-trekk ingredienser</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="autoDeductToggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="setting-hint">Trekk automatisk fra ingredienser når du lager en oppskrift</p>
+                        
+                        <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                            <span class="setting-label">OpenAI API-nøkkel (for AI-skanning)</span>
+                            <div style="display: flex; gap: 8px; width: 100%;">
+                                <input type="password" id="openaiKeyInput" placeholder="sk-..." 
+                                       style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg);">
+                                <button onclick="saveOpenAIKey()" class="settings-btn" style="margin: 0; padding: 10px 16px;">
+                                    Lagre
+                                </button>
+                            </div>
+                        </div>
+                        <p class="setting-hint">Valgfri - for bildegjenkjenning av matvarer. Hent din nøkkel fra platform.openai.com</p>
+                        <button onclick="testOpenAIConnection()" class="settings-btn">
+                            <span>🧪</span> Test AI-tilkobling
+                        </button>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>👥 Sosiale innstillinger</h3>
                         <div class="setting-item">
                             <span class="setting-label">Offentlig profil</span>
                             <label class="toggle">
@@ -663,7 +690,7 @@
                     </div>
 
                     <div class="settings-section">
-                        <h3>�💾 Data</h3>
+                        <h3>💾 Data</h3>
                         <button id="exportDataBtn" class="settings-btn">
                             <span>📥</span> Eksporter alt
                         </button>
@@ -675,7 +702,7 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v4.1.0</p>
+                        <p class="app-version">Familiens Kokebok v4.2.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
                         <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">100% privat - ingen AI lærer av dine oppskrifter</p>
                     </div>
@@ -802,10 +829,16 @@
                     <div class="menu-section-content">
                         <button class="menu-item" onclick="openEquipmentPanel(); toggleSideMenu(false);">
                             <span>🔧</span> Utstyr
-                            <span class="menu-badge new">NY</span>
                         </button>
                         <button class="menu-item" onclick="openPantryTracker(); toggleSideMenu(false);">
                             <span>🫙</span> Matkammer
+                        </button>
+                        <button class="menu-item" onclick="openPantryAIScanner(); toggleSideMenu(false);">
+                            <span>📸</span> AI Skanner
+                            <span class="menu-badge ai">AI</span>
+                        </button>
+                        <button class="menu-item" onclick="openPriceChecker(); toggleSideMenu(false);">
+                            <span>💰</span> Prissammenligning
                             <span class="menu-badge new">NY</span>
                         </button>
                     </div>

@@ -10610,3 +10610,830 @@ body.dark-mode .condition-good {
         position: relative;
     }
 }
+
+/* ===========================================
+   v4.2.0 - AI Scanner, Price Checker, Auto-Deduct
+   =========================================== */
+
+/* Menu badges */
+.menu-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-left: auto;
+}
+
+.menu-badge.new {
+    background: linear-gradient(135deg, var(--primary), #6366f1);
+    color: white;
+}
+
+.menu-badge.ai {
+    background: linear-gradient(135deg, #8b5cf6, #d946ef);
+    color: white;
+    animation: aiPulse 2s ease-in-out infinite;
+}
+
+@keyframes aiPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* AI Scanner Container */
+.ai-scanner-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.scanner-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #1a1a2e;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.scanner-preview video,
+.scanner-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.scanner-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.scanner-frame {
+    width: 80%;
+    height: 80%;
+    border: 3px dashed rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-lg);
+    animation: scannerPulse 2s ease-in-out infinite;
+}
+
+@keyframes scannerPulse {
+    0%, 100% { border-color: rgba(255, 255, 255, 0.3); }
+    50% { border-color: rgba(255, 255, 255, 0.7); }
+}
+
+.scanner-controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.scanner-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 24px;
+    border: none;
+    border-radius: var(--radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+
+.scanner-btn.primary {
+    background: linear-gradient(135deg, var(--primary), #6366f1);
+    color: white;
+}
+
+.scanner-btn.primary:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.scanner-btn.secondary {
+    background: var(--bg);
+    color: var(--text);
+    border: 2px solid var(--border-color);
+}
+
+.scanner-btn.secondary:hover {
+    background: var(--accent-light);
+}
+
+.scanner-btn.capture {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 16px 32px;
+    font-size: 1.1rem;
+}
+
+.scanner-btn.capture:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.upload-area {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    text-align: center;
+    margin-top: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.upload-area:hover {
+    border-color: var(--primary);
+    background: var(--accent-light);
+}
+
+.upload-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+/* Identified Items List */
+.identified-items {
+    margin-top: 24px;
+}
+
+.identified-items h3 {
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.identified-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    border: 1px solid var(--border-light);
+}
+
+.identified-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--primary);
+}
+
+.identified-item .item-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.identified-item .item-category {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    background: var(--bg);
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.identified-item .item-price {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.add-all-btn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--primary), #6366f1);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: all 0.2s;
+}
+
+.add-all-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+/* AI Status */
+.ai-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(217, 70, 239, 0.1));
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+}
+
+.ai-status.analyzing {
+    animation: aiAnalyzing 1.5s ease-in-out infinite;
+}
+
+@keyframes aiAnalyzing {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.ai-status-icon {
+    font-size: 1.5rem;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+.ai-status-text {
+    flex: 1;
+}
+
+.ai-status-text strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.ai-status-text small {
+    color: var(--text-light);
+}
+
+/* Price Checker */
+.price-checker-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.price-search-box {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.price-search-box input {
+    flex: 1;
+    padding: 14px 18px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    background: var(--card-bg);
+}
+
+.price-search-box input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.price-search-box button {
+    padding: 14px 24px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.price-search-box button:hover {
+    opacity: 0.9;
+}
+
+/* Quick category buttons */
+.quick-categories {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+}
+
+.quick-cat-btn {
+    padding: 10px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.quick-cat-btn:hover {
+    background: var(--accent-light);
+    border-color: var(--primary);
+}
+
+/* Product Grid */
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.product-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary);
+}
+
+.product-image {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    background: white;
+    padding: 12px;
+}
+
+.product-info {
+    padding: 14px;
+}
+
+.product-name {
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.product-brand {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-bottom: 8px;
+}
+
+.product-price {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.product-price .current {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.product-price .unit {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.product-store {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.store-logo {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+}
+
+/* Product Detail Modal */
+.product-detail {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.product-detail-image {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 20px;
+}
+
+.product-detail-info h2 {
+    margin-bottom: 8px;
+}
+
+.product-detail-brand {
+    color: var(--text-light);
+    margin-bottom: 16px;
+}
+
+.price-comparison-list {
+    margin-top: 20px;
+}
+
+.price-comparison-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+}
+
+.price-comparison-item.best {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+    border: 2px solid #10b981;
+}
+
+.price-comparison-store {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.price-comparison-store img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.price-comparison-price {
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.best-deal-badge {
+    background: #10b981;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+/* Auto-deduct Dialog */
+.deduct-dialog {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+}
+
+.deduct-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.deduct-header h3 {
+    margin: 0;
+}
+
+.deduct-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.deduct-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+}
+
+.deduct-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--primary);
+}
+
+.deduct-item-info {
+    flex: 1;
+}
+
+.deduct-item-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.deduct-item-amount {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.deduct-item-change {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.deduct-item-change .from {
+    color: var(--text-light);
+    text-decoration: line-through;
+}
+
+.deduct-item-change .arrow {
+    color: var(--primary);
+}
+
+.deduct-item-change .to {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.deduct-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.deduct-actions button {
+    flex: 1;
+    padding: 14px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.deduct-btn-confirm {
+    background: var(--primary);
+    color: white;
+    border: none;
+}
+
+.deduct-btn-confirm:hover {
+    opacity: 0.9;
+}
+
+.deduct-btn-cancel {
+    background: var(--bg);
+    color: var(--text);
+    border: 2px solid var(--border-color);
+}
+
+.deduct-btn-cancel:hover {
+    background: var(--accent-light);
+}
+
+/* Cost Breakdown */
+.cost-breakdown {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.cost-breakdown h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.cost-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.cost-item:last-child {
+    border-bottom: none;
+}
+
+.cost-item-name {
+    color: var(--text-light);
+}
+
+.cost-item-price {
+    font-weight: 600;
+}
+
+.cost-total {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 16px;
+    margin-top: 8px;
+    border-top: 2px solid var(--border-color);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.cost-total .amount {
+    color: var(--primary);
+}
+
+/* Pantry AI Scanner Button */
+.pantry-ai-scanner {
+    margin-bottom: 20px;
+}
+
+.ai-scan-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(217, 70, 239, 0.1));
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.ai-scan-btn:hover {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(217, 70, 239, 0.2));
+    border-color: rgba(139, 92, 246, 0.5);
+    transform: translateY(-2px);
+}
+
+.ai-icon {
+    font-size: 2rem;
+}
+
+.ai-scan-text {
+    flex: 1;
+    text-align: left;
+}
+
+.ai-scan-text strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text);
+}
+
+.ai-scan-text small {
+    color: var(--text-light);
+}
+
+.ai-badge {
+    background: linear-gradient(135deg, #8b5cf6, #d946ef);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    animation: aiPulse 2s ease-in-out infinite;
+}
+
+/* Pantry Stats Bar */
+.pantry-stats-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.pantry-stat {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+    border: 1px solid var(--border-light);
+}
+
+.pantry-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.pantry-stat-label {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 4px;
+}
+
+.pantry-stat.warning .pantry-stat-value {
+    color: var(--warning);
+}
+
+/* Price Check Button in Pantry */
+.pantry-price-check {
+    margin: 20px 0;
+}
+
+.price-check-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.price-check-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+}
+
+/* Shopping list with prices */
+.shopping-price-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+}
+
+.shopping-price-name {
+    flex: 1;
+}
+
+.shopping-price-range {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.shopping-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border-radius: var(--radius);
+    margin-top: 16px;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+/* Responsive for AI Scanner */
+@media (max-width: 600px) {
+    .product-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .product-detail {
+        grid-template-columns: 1fr;
+    }
+    
+    .scanner-controls {
+        flex-direction: column;
+    }
+    
+    .scanner-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .pantry-stats-bar {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 400px) {
+    .product-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Dark mode adjustments for new components */
+body.dark-mode .product-image {
+    background: #2a2a3e;
+}
+
+body.dark-mode .product-detail-image {
+    background: #2a2a3e;
+}
+
+body.dark-mode .ai-scan-btn {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(217, 70, 239, 0.15));
+}
+
+body.dark-mode .upload-area {
+    background: var(--card-bg);
+}
+
+body.dark-mode .price-search-box input {
+    color: var(--text);
+}
