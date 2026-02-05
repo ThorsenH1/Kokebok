@@ -848,8 +848,18 @@ function setupEventListeners() {
             }
             if (state.currentView === 'recipeListView') {
                 renderRecipeList();
-            } else if (state.currentView === 'dashboardView') {
-                // Could add live search to dashboard
+            } else if (state.currentView === 'dashboardView' && state.searchQuery.length >= 2) {
+                // Navigate to recipe list when searching from dashboard
+                navigateTo('recipeListView');
+                renderRecipeList();
+            }
+        });
+        
+        // Also handle Enter key to search from dashboard
+        on(searchInput, 'keypress', (e) => {
+            if (e.key === 'Enter' && state.searchQuery) {
+                navigateTo('recipeListView');
+                renderRecipeList();
             }
         });
     }
@@ -7553,7 +7563,7 @@ function openPantryAIScanner() {
     `;
     
     showModal('🤖 AI Matkammer-skanner', html, [
-        { text: 'Avbryt', onClick: () => { stopScanner(); closeModal(); } }
+        { text: 'Avbryt', onClick: () => { stopScanner(); closeGenericModal(); } }
     ]);
     
     // Start camera
@@ -13341,6 +13351,166 @@ function setTemp(celsius) {
     convertTemp('c');
 }
 window.setTemp = setTemp;
+
+// ===== MEAT TEMPERATURE GUIDE =====
+const MEAT_TEMPERATURES = {
+    beef: {
+        name: 'Storfe / Biff',
+        icon: '🥩',
+        temps: [
+            { level: 'Blue rare (rå)', temp: '46-49°C', desc: 'Veldig rå, kjølig senter' },
+            { level: 'Rare (rå+)', temp: '52-55°C', desc: 'Rød kjerne, saftig' },
+            { level: 'Medium rare', temp: '55-57°C', desc: 'Varmrosa kjerne, anbefalt' },
+            { level: 'Medium', temp: '60-63°C', desc: 'Rosa kjerne' },
+            { level: 'Medium well', temp: '65-69°C', desc: 'Svakt rosa' },
+            { level: 'Well done (gjennomstekt)', temp: '71°C+', desc: 'Ingen rosa, tørrere' }
+        ],
+        tips: 'La biffen hvile 5-10 min etter steking. Temperaturen stiger 3-5°C under hvile.'
+    },
+    pork: {
+        name: 'Svin',
+        icon: '🐷',
+        temps: [
+            { level: 'Medium (saftig)', temp: '63-65°C', desc: 'Svakt rosa, saftig' },
+            { level: 'Well done (anbefalt)', temp: '68-71°C', desc: 'Gjennomstekt, trygt' },
+            { level: 'Ribbe/pulled pork', temp: '88-95°C', desc: 'Mørt og fallende av beinet' }
+        ],
+        tips: 'Svinekjøtt bør alltid være minimum 63°C for mattrygghet.'
+    },
+    chicken: {
+        name: 'Kylling',
+        icon: '🍗',
+        temps: [
+            { level: 'Bryst', temp: '74°C', desc: 'Hvit, saftig, ingen rosa' },
+            { level: 'Lår', temp: '76-82°C', desc: 'Mørt, faller av beinet' },
+            { level: 'Hel kylling', temp: '74-82°C', desc: 'Sjekk tykkeste del av låret' }
+        ],
+        tips: '⚠️ Kylling må ALLTID være minimum 74°C! Aldri rosa.'
+    },
+    lamb: {
+        name: 'Lam',
+        icon: '🐑',
+        temps: [
+            { level: 'Rare (rå)', temp: '52-55°C', desc: 'Rød kjerne' },
+            { level: 'Medium rare', temp: '55-60°C', desc: 'Varmrosa, anbefalt' },
+            { level: 'Medium', temp: '60-65°C', desc: 'Rosa kjerne' },
+            { level: 'Well done', temp: '70°C+', desc: 'Gjennomstekt' },
+            { level: 'Lammelår (langsom)', temp: '85-90°C', desc: 'Mørt og saftig' }
+        ],
+        tips: 'Lam tåler å være rosa. La hvile 10-15 min etter steking.'
+    },
+    fish: {
+        name: 'Fisk',
+        icon: '🐟',
+        temps: [
+            { level: 'Laks (medium)', temp: '52-54°C', desc: 'Halvgjennomsiktig senter, saftig' },
+            { level: 'Laks (gjennomstekt)', temp: '60-63°C', desc: 'Gjennomstekt, flaker lett' },
+            { level: 'Hvitfisk (torsk, sei)', temp: '60-63°C', desc: 'Hvit og flaker lett' },
+            { level: 'Tunfisk (rå)', temp: '43-52°C', desc: 'Rå i midten, stekt utenpå' },
+            { level: 'Reker', temp: '57-60°C', desc: 'Rosa og fast' }
+        ],
+        tips: 'Fisk fortsetter å tilberedes etter at den tas av varmen.'
+    },
+    ground: {
+        name: 'Kvernet kjøtt',
+        icon: '🍔',
+        temps: [
+            { level: 'Burger (medium rare)', temp: '60°C', desc: 'Rosa i midten (kun fersk kjøtt)' },
+            { level: 'Burger (trygg)', temp: '71°C', desc: 'Gjennomstekt, anbefalt' },
+            { level: 'Kjøttboller', temp: '74°C', desc: 'Gjennomstekt' },
+            { level: 'Kjøttdeig (alle typer)', temp: '71-74°C', desc: 'Minimum for mattrygghet' }
+        ],
+        tips: '⚠️ Kvernet kjøtt har bakterier på hele overflaten - bør alltid være gjennomstekt!'
+    },
+    game: {
+        name: 'Vilt',
+        icon: '🦌',
+        temps: [
+            { level: 'Hjort (rare)', temp: '52-55°C', desc: 'Mørkerød kjerne' },
+            { level: 'Hjort (medium rare)', temp: '55-60°C', desc: 'Rosa kjerne, anbefalt' },
+            { level: 'Hjort (medium)', temp: '60-65°C', desc: 'Varmrosa' },
+            { level: 'Elg', temp: '55-63°C', desc: 'Rosa til medium' },
+            { level: 'Villsvin', temp: '71°C', desc: 'Gjennomstekt, som svin' }
+        ],
+        tips: 'Vilt er magert - oversteker lett. Hold temperaturen lav og la hvile godt.'
+    },
+    duck: {
+        name: 'And / Ender',
+        icon: '🦆',
+        temps: [
+            { level: 'Bryst (medium rare)', temp: '54-57°C', desc: 'Rosa kjerne, saftig' },
+            { level: 'Bryst (medium)', temp: '60-63°C', desc: 'Varmrosa' },
+            { level: 'Lår (confit)', temp: '74-82°C', desc: 'Mørt, faller av bein' }
+        ],
+        tips: 'Andebryst kan serveres rosa som biff. Stek med skinnsiden ned først.'
+    }
+};
+
+function openMeatTemperatureGuide() {
+    const html = `
+        <div class="meat-temp-guide">
+            <div class="meat-categories">
+                ${Object.entries(MEAT_TEMPERATURES).map(([key, data]) => `
+                    <button class="meat-cat-btn" onclick="showMeatTemps('${key}')">
+                        <span class="meat-icon">${data.icon}</span>
+                        <span class="meat-name">${data.name}</span>
+                    </button>
+                `).join('')}
+            </div>
+            
+            <div id="meatTempResults" class="meat-temp-results">
+                <p class="meat-temp-hint">👆 Velg type kjøtt for å se anbefalte temperaturer</p>
+            </div>
+            
+            <div class="meat-temp-disclaimer">
+                <p>⚠️ <strong>Viktig:</strong> Disse temperaturene er for kjernetemperatur målt med steketermometer.</p>
+                <p>🍼 Gravide, barn og eldre bør unngå rått kjøtt.</p>
+            </div>
+        </div>
+    `;
+    
+    showModal('🌡️🥩 Steketemperaturer', html, []);
+}
+window.openMeatTemperatureGuide = openMeatTemperatureGuide;
+
+function showMeatTemps(meatType) {
+    const data = MEAT_TEMPERATURES[meatType];
+    if (!data) return;
+    
+    const resultsDiv = document.getElementById('meatTempResults');
+    if (!resultsDiv) return;
+    
+    resultsDiv.innerHTML = `
+        <div class="meat-temp-card">
+            <div class="meat-temp-header">
+                <span class="meat-big-icon">${data.icon}</span>
+                <h3>${data.name}</h3>
+            </div>
+            
+            <div class="temp-levels">
+                ${data.temps.map(t => `
+                    <div class="temp-level">
+                        <div class="temp-level-main">
+                            <span class="temp-name">${t.level}</span>
+                            <span class="temp-value">${t.temp}</span>
+                        </div>
+                        <p class="temp-desc">${t.desc}</p>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div class="meat-tip">
+                <span>💡</span>
+                <p>${data.tips}</p>
+            </div>
+        </div>
+    `;
+    
+    // Highlight selected button
+    document.querySelectorAll('.meat-cat-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.closest('.meat-cat-btn')?.classList.add('active');
+}
+window.showMeatTemps = showMeatTemps;
 
 // ===== RECIPE RATING SYSTEM =====
 function rateRecipe(recipeId) {

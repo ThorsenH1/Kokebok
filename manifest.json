@@ -1,8 +1,8 @@
 {
     "name": "Familiens Kokebok",
     "short_name": "Kokebok",
-    "description": "Digitaliser og bevar familiens oppskrifter. Med AI-matskanner, prissammenligning, sosiale funksjoner, venner, topplister, utstyrsoversikt, matkammer, AI måltidsplanlegger, URL-import, handlemodus, ingrediens-erstatter, samlinger, batch cooking og mer!",
-    "version": "4.4.0",
+    "description": "Digitaliser og bevar familiens oppskrifter. Med AI-matskanner, prissammenligning, sosiale funksjoner, venner, topplister, utstyrsoversikt, matkammer, AI måltidsplanlegger, URL-import, handlemodus, ingrediens-erstatter, samlinger, batch cooking, steketemperaturer og mer!",
+    "version": "4.4.1",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#FDF5E6",

@@ -13666,3 +13666,180 @@ body.dark-mode .sub-tag:hover {
 body.dark-mode .report-header {
     background: linear-gradient(135deg, #3730a3, #5b21b6);
 }
+
+/* ===== MEAT TEMPERATURE GUIDE ===== */
+.meat-temp-guide {
+    max-width: 550px;
+    margin: 0 auto;
+}
+
+.meat-categories {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.meat-cat-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.meat-cat-btn:hover {
+    border-color: var(--primary);
+    background: var(--accent-light);
+}
+
+.meat-cat-btn.active {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+}
+
+.meat-icon {
+    font-size: 1.8rem;
+}
+
+.meat-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.meat-temp-results {
+    min-height: 200px;
+}
+
+.meat-temp-hint {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 60px 20px;
+}
+
+.meat-temp-card {
+    animation: fadeIn 0.3s ease;
+}
+
+.meat-temp-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--border-light);
+}
+
+.meat-big-icon {
+    font-size: 2.5rem;
+}
+
+.meat-temp-header h3 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.temp-levels {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.temp-level {
+    padding: 14px 16px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--primary);
+}
+
+.temp-level:nth-child(1) { border-left-color: #3b82f6; }
+.temp-level:nth-child(2) { border-left-color: #10b981; }
+.temp-level:nth-child(3) { border-left-color: #f59e0b; }
+.temp-level:nth-child(4) { border-left-color: #ef4444; }
+.temp-level:nth-child(5) { border-left-color: #8b5cf6; }
+.temp-level:nth-child(6) { border-left-color: #6b7280; }
+
+.temp-level-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.temp-name {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.temp-value {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 1.1rem;
+    padding: 4px 12px;
+    background: var(--accent-light);
+    border-radius: 16px;
+}
+
+.temp-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.meat-tip {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+    border-radius: var(--radius);
+    border-left: 4px solid #3b82f6;
+}
+
+.meat-tip span {
+    font-size: 1.3rem;
+}
+
+.meat-tip p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.meat-temp-disclaimer {
+    margin-top: 24px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.meat-temp-disclaimer p {
+    margin: 0 0 8px 0;
+}
+
+.meat-temp-disclaimer p:last-child {
+    margin: 0;
+}
+
+@media (max-width: 500px) {
+    .meat-categories {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+body.dark-mode .temp-level {
+    background: var(--bg-card);
+}
+
+body.dark-mode .meat-cat-btn.active {
+    background: var(--primary-dark);
+}
