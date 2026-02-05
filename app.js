@@ -701,6 +701,15 @@ function applySettings() {
             openaiKeyInput.value = savedKey;
         }
     }
+    
+    // Load Gemini key from localStorage
+    const geminiKeyInput = $('geminiKeyInput');
+    if (geminiKeyInput) {
+        const savedGeminiKey = localStorage.getItem('kokebok_gemini_key');
+        if (savedGeminiKey) {
+            geminiKeyInput.value = savedGeminiKey;
+        }
+    }
 }
 
 // v4.2 - Save OpenAI API Key
@@ -750,6 +759,80 @@ async function testOpenAIConnection() {
 }
 window.saveOpenAIKey = saveOpenAIKey;
 window.testOpenAIConnection = testOpenAIConnection;
+
+// v4.5 - Google Gemini API (FREE!)
+function saveGeminiKey() {
+    const keyInput = $('geminiKeyInput');
+    if (!keyInput) return;
+    
+    const key = keyInput.value.trim();
+    if (key) {
+        localStorage.setItem('kokebok_gemini_key', key);
+        showToast('✅ Gemini API-nøkkel lagret!', 'success');
+    } else {
+        localStorage.removeItem('kokebok_gemini_key');
+        showToast('🗑️ Gemini API-nøkkel fjernet');
+    }
+}
+window.saveGeminiKey = saveGeminiKey;
+
+// v4.5 - Load Gemini key on init
+function loadGeminiKey() {
+    const geminiKeyInput = $('geminiKeyInput');
+    if (geminiKeyInput) {
+        const savedKey = localStorage.getItem('kokebok_gemini_key');
+        if (savedKey) {
+            geminiKeyInput.value = savedKey;
+        }
+    }
+}
+
+// v4.5 - Test Gemini Connection  
+async function testGeminiConnection() {
+    const key = localStorage.getItem('kokebok_gemini_key');
+    
+    if (!key) {
+        showToast('⚠️ Ingen Gemini API-nøkkel lagret', 'warning');
+        return;
+    }
+    
+    showToast('🔄 Tester Gemini-tilkobling...', 'info');
+    
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: 'Svar bare med: OK'
+                    }]
+                }]
+            })
+        });
+        
+        if (response.ok) {
+            showToast('✅ Gemini-tilkobling fungerer! AI-skanning er klar.', 'success');
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = errorData.error?.message || 'Ukjent feil';
+            
+            if (response.status === 400 && errorMsg.includes('API key')) {
+                showToast('❌ Ugyldig Gemini API-nøkkel', 'error');
+            } else if (response.status === 403) {
+                showToast('❌ API-nøkkel har ikke tilgang til Gemini', 'error');
+            } else {
+                showToast(`⚠️ Feil: ${errorMsg}`, 'warning');
+            }
+        }
+    } catch (error) {
+        console.error('Gemini test error:', error);
+        showToast('❌ Tilkoblingsfeil', 'error');
+    }
+}
+window.testGeminiConnection = testGeminiConnection;
 
 function updateUserInfo() {
     const avatar = $('userAvatar');
@@ -5239,8 +5322,9 @@ async function updatePublicProfile() {
     
     try {
         await db.collection('publicProfiles').doc(state.user.uid).set({
+            uid: state.user.uid, // REQUIRED for Firebase security rules!
             displayName: state.user.displayName || 'Anonym kokk',
-            email: state.user.email,
+            email: state.user.email.toLowerCase(), // Normalize for search
             photoURL: state.user.photoURL || null,
             level: playerLevel.level,
             xp: playerLevel.xp,
@@ -5252,6 +5336,7 @@ async function updatePublicProfile() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             isPublic: state.settings.profilePublic !== false
         }, { merge: true });
+        console.log('✓ Public profile updated');
     } catch (e) {
         console.warn('Kunne ikke oppdatere profil:', e.message);
     }
@@ -7719,65 +7804,146 @@ async function analyzeImage(imageData) {
 }
 
 async function analyzeImageWithAI(imageData) {
-    // Use OpenAI API for image analysis
-    const apiKey = localStorage.getItem('kokebok_openai_key');
+    // Try Gemini first (free), then OpenAI, then fallback
+    const geminiKey = localStorage.getItem('kokebok_gemini_key');
+    const openaiKey = localStorage.getItem('kokebok_openai_key');
     
-    if (!apiKey) {
-        // Fallback to basic pattern recognition
-        return basicImageAnalysis(imageData);
+    if (geminiKey) {
+        try {
+            return await analyzeWithGemini(imageData, geminiKey);
+        } catch (e) {
+            console.warn('Gemini API error, trying fallback:', e.message);
+        }
+    }
+    
+    if (openaiKey) {
+        try {
+            return await analyzeWithOpenAI(imageData, openaiKey);
+        } catch (e) {
+            console.warn('OpenAI API error:', e.message);
+        }
+    }
+    
+    // Fallback to basic pattern recognition
+    return basicImageAnalysis(imageData);
+}
+
+// Google Gemini Vision API (FREE tier available!)
+async function analyzeWithGemini(imageData, apiKey) {
+    // Extract base64 data without the prefix
+    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+    const mimeType = imageData.match(/^data:(image\/\w+);/)?.[1] || 'image/jpeg';
+    
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [
+                    {
+                        text: `Du er en ekspert på å identifisere matvarer i bilder.
+Analyser bildet og identifiser ALLE synlige matvarer, ingredienser, og dagligvarer.
+Vær grundig - se etter emballasje, merker, og produkttyper.
+
+VIKTIG: Svar BARE med en JSON-array i dette eksakte formatet:
+[
+  {"name": "Produktnavn på norsk", "quantity": 1, "unit": "stk"},
+  {"name": "Annet produkt", "quantity": 0.5, "unit": "kg"}
+]
+
+Enheter kan være: stk, liter, kg, g, pk, boks, pose, flaske
+
+Ikke inkluder noen forklaring eller annen tekst - BARE JSON-arrayet.`
+                    },
+                    {
+                        inline_data: {
+                            mime_type: mimeType,
+                            data: base64Data
+                        }
+                    }
+                ]
+            }],
+            generationConfig: {
+                temperature: 0.2,
+                maxOutputTokens: 2000
+            }
+        })
+    });
+    
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Gemini API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    
+    // Parse JSON from response (handle potential markdown wrapping)
+    let jsonStr = content;
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+        jsonStr = jsonMatch[1] || jsonMatch[0];
     }
     
     try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: [
-                    {
-                        role: 'system',
-                        content: `Du er en ekspert på å identifisere matvarer i bilder. 
-                        Analyser bildet og list opp alle synlige matvarer.
-                        For hver vare, estimer mengden.
-                        Svar BARE med JSON i dette formatet:
-                        [{"name": "Melk", "quantity": 1, "unit": "liter"}, ...]
-                        Bruk norske navn. Ikke inkluder forklaringer.`
-                    },
-                    {
-                        role: 'user',
-                        content: [
-                            { type: 'text', text: 'Identifiser alle matvarer i dette bildet:' },
-                            { type: 'image_url', image_url: { url: imageData } }
-                        ]
-                    }
-                ],
-                max_tokens: 1000
-            })
-        });
-        
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || '[]';
-        
-        // Parse JSON from response
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
-        }
-        
+        const items = JSON.parse(jsonStr);
+        console.log('✓ Gemini identifiserte', items.length, 'varer');
+        return Array.isArray(items) ? items : [];
+    } catch (e) {
+        console.warn('JSON parse error:', e, content);
         return [];
-        
-    } catch (error) {
-        console.error('OpenAI API error:', error);
-        return basicImageAnalysis(imageData);
     }
 }
 
+// OpenAI Vision API (requires paid API key)
+async function analyzeWithOpenAI(imageData, apiKey) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: [
+                {
+                    role: 'system',
+                    content: `Du er en ekspert på å identifisere matvarer i bilder. 
+                    Analyser bildet og list opp alle synlige matvarer.
+                    For hver vare, estimer mengden.
+                    Svar BARE med JSON i dette formatet:
+                    [{"name": "Melk", "quantity": 1, "unit": "liter"}, ...]
+                    Bruk norske navn. Ikke inkluder forklaringer.`
+                },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: 'Identifiser alle matvarer i dette bildet:' },
+                        { type: 'image_url', image_url: { url: imageData } }
+                    ]
+                }
+            ],
+            max_tokens: 1000
+        })
+    });
+    
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '[]';
+    
+    // Parse JSON from response
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+    }
+    
+    return [];
+}
+
 function basicImageAnalysis(imageData) {
-    // Fallback: Return empty array and suggest manual entry
-    showToast('For AI-analyse, legg til OpenAI API-nøkkel i innstillinger', 'info');
+    // Fallback: Return empty array and suggest getting Gemini API key
+    showToast('🌟 For AI-skanning: Hent GRATIS Gemini API-nøkkel i innstillinger!', 'info');
     return [];
 }
 
@@ -13511,6 +13677,184 @@ function showMeatTemps(meatType) {
     event.target.closest('.meat-cat-btn')?.classList.add('active');
 }
 window.showMeatTemps = showMeatTemps;
+
+// ===== WINE PAIRING GUIDE =====
+const winePairings = {
+    'beef': {
+        emoji: '🥩',
+        name: 'Biff & Storfe',
+        wines: [
+            { type: 'Cabernet Sauvignon', desc: 'Klassisk til biff med tanniner som balanserer fettet', rating: 5 },
+            { type: 'Malbec', desc: 'Argentinsk fullkroppsvin, perfekt til grillet kjøtt', rating: 5 },
+            { type: 'Syrah/Shiraz', desc: 'Krydret og kraftig, god til marinert biff', rating: 4 },
+            { type: 'Barolo', desc: 'Italiensk luksus til spesielle anledninger', rating: 5 },
+            { type: 'Merlot', desc: 'Mykere alternativ, god til mørt kjøtt', rating: 4 }
+        ]
+    },
+    'lamb': {
+        emoji: '🍖',
+        name: 'Lam',
+        wines: [
+            { type: 'Rioja', desc: 'Spansk klassiker, perfekt match til lam', rating: 5 },
+            { type: 'Côtes du Rhône', desc: 'Krydret og elegant med urtenoter', rating: 5 },
+            { type: 'Pinot Noir', desc: 'Lettere alternativ til lammesteak', rating: 4 },
+            { type: 'Châteauneuf-du-Pape', desc: 'Kraftig og kompleks til feiring', rating: 5 },
+            { type: 'Grenache', desc: 'Fruktdreven og vennlig pris', rating: 4 }
+        ]
+    },
+    'pork': {
+        emoji: '🥓',
+        name: 'Svin',
+        wines: [
+            { type: 'Riesling', desc: 'Spesielt tørr Riesling til svinekjøtt', rating: 5 },
+            { type: 'Chardonnay', desc: 'Eiket utgave til kremet tilberedning', rating: 4 },
+            { type: 'Pinot Noir', desc: 'Universell match, spesielt til ribbe', rating: 5 },
+            { type: 'Rosé', desc: 'Forfriskende til svinenakke og pulled pork', rating: 4 },
+            { type: 'Zinfandel', desc: 'Fruktdreven, god til BBQ-saus', rating: 4 }
+        ]
+    },
+    'chicken': {
+        emoji: '🍗',
+        name: 'Kylling & Fjærfe',
+        wines: [
+            { type: 'Chardonnay', desc: 'Klassiker til stekt kylling', rating: 5 },
+            { type: 'Pinot Grigio', desc: 'Frisk og lett til hvitt kjøtt', rating: 4 },
+            { type: 'Sauvignon Blanc', desc: 'Perfekt til urtemrinert kylling', rating: 5 },
+            { type: 'Champagne/Musserende', desc: 'Elegant til kyllingrett', rating: 4 },
+            { type: 'Viognier', desc: 'Blomstret og aromatisk alternativ', rating: 4 }
+        ]
+    },
+    'fish': {
+        emoji: '🐟',
+        name: 'Fisk',
+        wines: [
+            { type: 'Chablis', desc: 'Mineralsk, perfekt til skalldyr og hvitfisk', rating: 5 },
+            { type: 'Muscadet', desc: 'Klassiker til østers og blåskjell', rating: 5 },
+            { type: 'Pinot Grigio', desc: 'Lett og spritsende til laks', rating: 4 },
+            { type: 'Albariño', desc: 'Spansk hvitvin til sjømat', rating: 5 },
+            { type: 'Sancerre', desc: 'Elegant Sauvignon Blanc til fin fisk', rating: 5 }
+        ]
+    },
+    'pasta': {
+        emoji: '🍝',
+        name: 'Pasta',
+        wines: [
+            { type: 'Chianti', desc: 'Italiensk klassiker til tomatsaus', rating: 5 },
+            { type: 'Sangiovese', desc: 'Frisk syre balanserer tomater', rating: 5 },
+            { type: 'Pinot Grigio', desc: 'Perfekt til hvite sauser og pesto', rating: 4 },
+            { type: 'Barbera', desc: 'Lett og fruktig til bolognese', rating: 4 },
+            { type: 'Verdicchio', desc: 'Til sjømatpasta', rating: 4 }
+        ]
+    },
+    'pizza': {
+        emoji: '🍕',
+        name: 'Pizza',
+        wines: [
+            { type: 'Montepulciano', desc: 'Klassisk italiensk, uformell og god', rating: 5 },
+            { type: 'Barbera', desc: 'Lett og frisk til ostepizza', rating: 4 },
+            { type: 'Lambrusco', desc: 'Lettbrusende, perfekt match!', rating: 5 },
+            { type: 'Nero d\'Avola', desc: 'Siciliansk til kjøttpizza', rating: 4 },
+            { type: 'Prosecco', desc: 'Feiring med pizza!', rating: 4 }
+        ]
+    },
+    'cheese': {
+        emoji: '🧀',
+        name: 'Ost',
+        wines: [
+            { type: 'Port', desc: 'Klassiker til blåost', rating: 5 },
+            { type: 'Sauternes', desc: 'Søt vin til kraftige oster', rating: 5 },
+            { type: 'Champagne', desc: 'Bobler til brie og camembert', rating: 5 },
+            { type: 'Riesling', desc: 'Aromatisk til geitost', rating: 4 },
+            { type: 'Amarone', desc: 'Kraftig til parmesan', rating: 5 }
+        ]
+    },
+    'dessert': {
+        emoji: '🍰',
+        name: 'Dessert',
+        wines: [
+            { type: 'Moscato d\'Asti', desc: 'Lett søt til frukdessert', rating: 5 },
+            { type: 'Late Harvest Riesling', desc: 'Honning og aprikos', rating: 5 },
+            { type: 'Sherry (Pedro Ximénez)', desc: 'Til sjokolade!', rating: 5 },
+            { type: 'Champagne Demi-Sec', desc: 'Til kake og macarons', rating: 4 },
+            { type: 'Brachetto', desc: 'Lett rød til bær', rating: 4 }
+        ]
+    }
+};
+
+function openWinePairing(recipeId = null) {
+    let selectedCategory = null;
+    
+    // If called from a recipe, try to auto-detect category
+    if (recipeId) {
+        const recipe = state.recipes.find(r => r.id === recipeId);
+        if (recipe) {
+            const name = (recipe.name + ' ' + (recipe.description || '')).toLowerCase();
+            if (name.includes('biff') || name.includes('okse') || name.includes('storfe')) selectedCategory = 'beef';
+            else if (name.includes('lam')) selectedCategory = 'lamb';
+            else if (name.includes('svin') || name.includes('ribbe') || name.includes('nakke')) selectedCategory = 'pork';
+            else if (name.includes('kylling') || name.includes('and') || name.includes('kalkun')) selectedCategory = 'chicken';
+            else if (name.includes('fisk') || name.includes('laks') || name.includes('torsk') || name.includes('reke')) selectedCategory = 'fish';
+            else if (name.includes('pasta') || name.includes('spaghetti') || name.includes('lasagne')) selectedCategory = 'pasta';
+            else if (name.includes('pizza')) selectedCategory = 'pizza';
+            else if (name.includes('ost') || name.includes('fondue')) selectedCategory = 'cheese';
+            else if (name.includes('kake') || name.includes('dessert') || name.includes('sjokolade')) selectedCategory = 'dessert';
+        }
+    }
+    
+    const categoryButtons = Object.entries(winePairings).map(([key, data]) => 
+        `<button class="wine-cat-btn ${selectedCategory === key ? 'active' : ''}" onclick="showWinePairings('${key}')">${data.emoji}<br>${data.name}</button>`
+    ).join('');
+    
+    openGenericModal('🍷 Vinanbefaling', `
+        <div class="wine-pairing-guide">
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">
+                Velg mattype for å få vinforslag
+            </p>
+            <div class="wine-categories" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;">
+                ${categoryButtons}
+            </div>
+            <div id="winePairingResults" class="wine-results">
+                ${selectedCategory ? getWinePairingHtml(selectedCategory) : '<p style="text-align: center; color: var(--text-tertiary);">👆 Velg en kategori over</p>'}
+            </div>
+        </div>
+    `, [], { width: '450px' });
+}
+window.openWinePairing = openWinePairing;
+
+function showWinePairings(category) {
+    const resultsDiv = document.getElementById('winePairingResults');
+    if (!resultsDiv || !winePairings[category]) return;
+    
+    resultsDiv.innerHTML = getWinePairingHtml(category);
+    
+    // Highlight selected button
+    document.querySelectorAll('.wine-cat-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.closest('.wine-cat-btn')?.classList.add('active');
+}
+window.showWinePairings = showWinePairings;
+
+function getWinePairingHtml(category) {
+    const data = winePairings[category];
+    if (!data) return '';
+    
+    return `
+        <div class="wine-pairing-list">
+            <h4 style="margin: 0 0 12px 0;">${data.emoji} Viner til ${data.name}</h4>
+            ${data.wines.map(wine => `
+                <div class="wine-item" style="padding: 12px; background: var(--card-bg); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="color: var(--accent-color);">🍷 ${wine.type}</strong>
+                        <span style="color: #f4c430;">${'★'.repeat(wine.rating)}${'☆'.repeat(5-wine.rating)}</span>
+                    </div>
+                    <p style="margin: 4px 0 0 0; font-size: 0.9rem; color: var(--text-secondary);">${wine.desc}</p>
+                </div>
+            `).join('')}
+            <p style="margin: 12px 0 0 0; font-size: 0.8rem; color: var(--text-tertiary); text-align: center;">
+                💡 Tips: Temperaturen for rødvin er 16-18°C, hvitvin 8-12°C
+            </p>
+        </div>
+    `;
+}
 
 // ===== RECIPE RATING SYSTEM =====
 function rateRecipe(recipeId) {

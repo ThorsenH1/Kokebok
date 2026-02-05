@@ -87,6 +87,23 @@ service cloud.firestore {
       );
     }
     
+    // ===== SHARED RECIPES (TOP LEVEL) =====
+    // Allows sharing recipes between users
+    match /sharedRecipes/{shareId} {
+      // Anyone authenticated can create a share (to send a recipe)
+      allow create: if isAuth();
+      // Can read if you are sender or recipient
+      allow read: if isAuth() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+      // Can update/delete if you are sender or recipient
+      allow update, delete: if isAuth() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+    }
+    
     // ===== PUBLIC LEADERBOARD =====
     
     // Leaderboard - readable by all authenticated users

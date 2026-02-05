@@ -671,8 +671,30 @@
                         </div>
                         <p class="setting-hint">Trekk automatisk fra ingredienser når du lager en oppskrift</p>
                         
+                        <!-- Google Gemini (FREE!) -->
                         <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-                            <span class="setting-label">OpenAI API-nøkkel (for AI-skanning)</span>
+                            <span class="setting-label">🌟 Google Gemini API-nøkkel (GRATIS!)</span>
+                            <div style="display: flex; gap: 8px; width: 100%;">
+                                <input type="password" id="geminiKeyInput" placeholder="AIzaSy..." 
+                                       style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg);">
+                                <button onclick="saveGeminiKey()" class="settings-btn" style="margin: 0; padding: 10px 16px;">
+                                    Lagre
+                                </button>
+                            </div>
+                        </div>
+                        <p class="setting-hint">
+                            ✨ <strong>Anbefalt!</strong> Gratis AI-skanning av matvarer. 
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--accent-color);">
+                                Hent gratis nøkkel her →
+                            </a>
+                        </p>
+                        <button onclick="testGeminiConnection()" class="settings-btn">
+                            <span>🧪</span> Test Gemini-tilkobling
+                        </button>
+                        
+                        <!-- OpenAI (Paid alternative) -->
+                        <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px;">
+                            <span class="setting-label">OpenAI API-nøkkel (valgfritt - betalt)</span>
                             <div style="display: flex; gap: 8px; width: 100%;">
                                 <input type="password" id="openaiKeyInput" placeholder="sk-..." 
                                        style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg);">
@@ -681,10 +703,7 @@
                                 </button>
                             </div>
                         </div>
-                        <p class="setting-hint">Valgfri - for bildegjenkjenning av matvarer. Hent din nøkkel fra platform.openai.com</p>
-                        <button onclick="testOpenAIConnection()" class="settings-btn">
-                            <span>🧪</span> Test AI-tilkobling
-                        </button>
+                        <p class="setting-hint">Alternativ til Gemini. Krever betalt OpenAI-konto.</p>
                     </div>
 
                     <div class="settings-section">
@@ -715,7 +734,7 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v4.3.0</p>
+                        <p class="app-version">Familiens Kokebok v4.5.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
                         <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">100% privat - ingen AI lærer av dine oppskrifter</p>
                     </div>
@@ -882,9 +901,16 @@
                         <button class="menu-item" onclick="openNutritionCalculator(); toggleSideMenu(false);">
                             <span>🥗</span> Næringsinnhold
                         </button>
+                        <button class="menu-item" onclick="openMeatTemperatureGuide(); toggleSideMenu(false);">
+                            <span>🌡️</span> Kjøtttemperaturer
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                        <button class="menu-item" onclick="openWinePairing(); toggleSideMenu(false);">
+                            <span>🍷</span> Vinanbefaling
+                            <span class="menu-badge new">NY</span>
+                        </button>
                         <button class="menu-item" onclick="openSeasonalCalendar(); toggleSideMenu(false);">
                             <span>🌱</span> Sesongkalender
-                            <span class="menu-badge new">NY</span>
                         </button>
                         <button class="menu-item" onclick="showVoiceHelp(); toggleSideMenu(false);">
                             <span>🎤</span> Stemmekommandoer
