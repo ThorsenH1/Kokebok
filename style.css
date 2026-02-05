@@ -11437,3 +11437,1008 @@ body.dark-mode .upload-area {
 body.dark-mode .price-search-box input {
     color: var(--text);
 }
+
+/* ===========================================
+   v4.3.0 - Premium Features CSS
+   =========================================== */
+
+/* Nutrition Calculator */
+.nutrition-calculator {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.nutrition-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.nutrition-header h3 {
+    margin-bottom: 4px;
+}
+
+.nutrition-header p {
+    color: var(--text-light);
+}
+
+.nutrition-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.nutrition-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    text-align: center;
+    border: 1px solid var(--border-light);
+}
+
+.nutrition-card.total {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.nutrition-card.per-serving {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.nutrition-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.nutrition-label {
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-light);
+}
+
+.nutrition-values {
+    display: grid;
+    gap: 8px;
+}
+
+.nv-item {
+    font-size: 0.9rem;
+    color: var(--text-light);
+}
+
+.nv-item span {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.nv-item.cal span {
+    font-size: 1.3rem;
+    color: var(--primary);
+}
+
+.macro-chart {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.macro-chart h4 {
+    margin-bottom: 16px;
+}
+
+.macro-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.macro-bar {
+    display: grid;
+    grid-template-columns: 100px 1fr 50px;
+    align-items: center;
+    gap: 12px;
+}
+
+.macro-label {
+    font-size: 0.9rem;
+}
+
+.macro-track {
+    height: 12px;
+    background: var(--bg);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.macro-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease;
+}
+
+.macro-fill.protein {
+    background: linear-gradient(90deg, #ef4444, #f97316);
+}
+
+.macro-fill.carbs {
+    background: linear-gradient(90deg, #3b82f6, #6366f1);
+}
+
+.macro-fill.fat {
+    background: linear-gradient(90deg, #f59e0b, #eab308);
+}
+
+.macro-percent {
+    font-weight: 600;
+    text-align: right;
+}
+
+.allergen-warning {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.allergen-warning h4 {
+    color: #dc2626;
+    margin-bottom: 12px;
+}
+
+.allergen-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.allergen-tag {
+    background: rgba(239, 68, 68, 0.2);
+    color: #dc2626;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.allergen-hint {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 12px;
+}
+
+.allergen-ok {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+    border-radius: var(--radius);
+    color: #059669;
+    font-weight: 500;
+}
+
+.nutrition-disclaimer {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    text-align: center;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-light);
+}
+
+/* Voice Commands */
+.voice-help {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.voice-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    margin-bottom: 24px;
+}
+
+.voice-status.active {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+    animation: voicePulse 2s ease-in-out infinite;
+}
+
+@keyframes voicePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.voice-icon {
+    font-size: 1.5rem;
+}
+
+.voice-commands-list {
+    display: grid;
+    gap: 16px;
+}
+
+.voice-cmd-group {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.voice-cmd-group h5 {
+    margin-bottom: 12px;
+    color: var(--primary);
+}
+
+.voice-cmd-group ul {
+    list-style: none;
+    padding: 0;
+}
+
+.voice-cmd-group li {
+    padding: 8px 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.voice-cmd-group li:last-child {
+    border-bottom: none;
+}
+
+/* Cooking Tips */
+.cooking-tip {
+    text-align: center;
+    padding: 24px;
+}
+
+.cooking-tip .tip-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+}
+
+.cooking-tip .tip-category {
+    background: var(--primary);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: inline-block;
+}
+
+.cooking-tip .tip-text {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.tip-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.all-tips {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.tips-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.tip-tab {
+    flex: 1;
+    padding: 12px;
+    background: var(--bg);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.tip-tab.active {
+    background: var(--primary);
+    color: white;
+}
+
+.tips-content {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.tip-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+}
+
+.tip-num {
+    min-width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.tip-body {
+    flex: 1;
+}
+
+.tip-cat-badge {
+    background: var(--accent-light);
+    color: var(--primary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: inline-block;
+}
+
+.tip-save-btn {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all 0.2s;
+}
+
+.tip-save-btn:hover {
+    opacity: 1;
+    transform: scale(1.2);
+}
+
+.no-tips {
+    text-align: center;
+    color: var(--text-light);
+    padding: 40px;
+}
+
+/* Seasonal Calendar */
+.seasonal-calendar {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.season-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.season-nav button {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: var(--bg);
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.season-nav button:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.season-nav h3 {
+    margin: 0;
+}
+
+.season-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.season-section h4 {
+    margin-bottom: 12px;
+    color: var(--text-light);
+}
+
+.season-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.season-item {
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.season-item.veg {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.2));
+    color: #16a34a;
+}
+
+.season-item.fruit {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 88, 12, 0.2));
+    color: #ea580c;
+}
+
+.season-item.protein {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+    color: #dc2626;
+}
+
+.season-legend {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.legend-dot.veg { background: #16a34a; }
+.legend-dot.fruit { background: #ea580c; }
+.legend-dot.protein { background: #dc2626; }
+
+/* Stats Dashboard */
+.stats-dashboard {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.stats-hero {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-hero-item {
+    background: linear-gradient(135deg, var(--primary), #6366f1);
+    color: white;
+    padding: 20px;
+    border-radius: var(--radius-lg);
+    text-align: center;
+}
+
+.hero-num {
+    font-size: 2rem;
+    font-weight: 700;
+    display: block;
+}
+
+.hero-label {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    border: 1px solid var(--border-light);
+}
+
+.stat-card.wide {
+    grid-column: 1 / -1;
+}
+
+.stat-card h4 {
+    margin-bottom: 16px;
+    color: var(--text-light);
+}
+
+.category-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cat-bar {
+    display: grid;
+    grid-template-columns: 24px 60px 1fr 32px;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.cat-icon {
+    font-size: 1rem;
+}
+
+.cat-progress {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.cat-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #6366f1);
+    border-radius: 4px;
+}
+
+.cat-count {
+    font-weight: 600;
+    text-align: right;
+}
+
+.time-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.time-stat {
+    text-align: center;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: var(--radius);
+}
+
+.time-stat .time-icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.time-stat span:nth-child(2) {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: block;
+}
+
+.time-label {
+    font-size: 0.7rem;
+    color: var(--text-light);
+}
+
+.activity-stats p,
+.pantry-stats-detail p {
+    margin: 8px 0;
+}
+
+.cooked-history {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.cooked-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.cooked-item:last-child {
+    border-bottom: none;
+}
+
+.cooked-date {
+    color: var(--text-light);
+    font-size: 0.85rem;
+}
+
+.no-data {
+    text-align: center;
+    color: var(--text-light);
+    padding: 20px;
+}
+
+.stats-achievements {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+}
+
+.stats-achievements h4 {
+    margin-bottom: 16px;
+}
+
+.achievement-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.achievement-badges .badge {
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    background: var(--bg);
+    color: var(--text-light);
+    opacity: 0.5;
+}
+
+.achievement-badges .badge.earned {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #78350f;
+    opacity: 1;
+}
+
+/* Waste Tracker */
+.waste-tracker {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.waste-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.waste-stat {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    text-align: center;
+}
+
+.waste-num {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--warning);
+    display: block;
+}
+
+.waste-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.waste-goal {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.waste-goal p {
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+
+.goal-progress {
+    height: 10px;
+    background: rgba(16, 185, 129, 0.2);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.goal-bar {
+    height: 100%;
+    background: #10b981;
+    border-radius: 5px;
+    transition: width 0.5s ease;
+}
+
+.waste-log {
+    margin-top: 24px;
+}
+
+.waste-log h4 {
+    margin-bottom: 12px;
+}
+
+.waste-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 12px;
+    padding: 12px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.waste-name {
+    font-weight: 500;
+}
+
+.waste-reason {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    background: var(--bg);
+    padding: 4px 8px;
+    border-radius: 10px;
+}
+
+.waste-date {
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.no-waste {
+    text-align: center;
+    padding: 20px;
+    color: var(--success);
+}
+
+.waste-tips {
+    margin-top: 24px;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+}
+
+.waste-tips h4 {
+    margin-bottom: 12px;
+}
+
+.waste-tips ul {
+    padding-left: 20px;
+}
+
+.waste-tips li {
+    padding: 6px 0;
+    font-size: 0.9rem;
+}
+
+.log-waste-form {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.log-waste-form .form-group {
+    margin-bottom: 16px;
+}
+
+.log-waste-form label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.log-waste-form input,
+.log-waste-form select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    background: var(--card-bg);
+}
+
+/* Cooking Mode */
+.cooking-mode {
+    max-width: 500px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.cooking-progress {
+    margin-bottom: 24px;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), #10b981);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.cooking-step-content {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    margin-bottom: 24px;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.step-text {
+    font-size: 1.2rem;
+    line-height: 1.6;
+}
+
+.cooking-controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.cook-btn {
+    padding: 14px 24px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cook-btn.prev,
+.cook-btn.next {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.cook-btn.prev:hover,
+.cook-btn.next:hover {
+    background: var(--accent-light);
+}
+
+.cook-btn.timer {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.cook-btn.finish {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.cook-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Quick Timer */
+.quick-timer {
+    text-align: center;
+}
+
+.timer-presets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.timer-presets button {
+    padding: 16px;
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.timer-presets button:hover {
+    border-color: var(--primary);
+    background: var(--accent-light);
+}
+
+/* Seasonal Recipe Matches */
+.seasonal-recipes {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.recipe-matches {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.recipe-match {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.recipe-match:hover {
+    background: var(--accent-light);
+    transform: translateX(4px);
+}
+
+.match-icon {
+    font-size: 1.5rem;
+}
+
+.match-name {
+    font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .stats-hero {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .nutrition-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .waste-summary {
+        grid-template-columns: 1fr;
+    }
+    
+    .cooking-controls {
+        flex-direction: column;
+    }
+    
+    .timer-presets {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Dark mode for new components */
+body.dark-mode .stat-hero-item {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+body.dark-mode .allergen-warning {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.15));
+}
+
+body.dark-mode .season-item.veg {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3));
+}
+
+body.dark-mode .season-item.fruit {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(234, 88, 12, 0.3));
+}
+
+body.dark-mode .season-item.protein {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.3));
+}

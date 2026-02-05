@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=4.2.0">
+    <link rel="stylesheet" href="style.css?v=4.3.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -328,22 +328,22 @@
                 <!-- Premium Recipe Actions -->
                 <div class="premium-actions">
                     <button class="premium-btn cook-mode" onclick="startCookingMode()">
-                        <span>👨‍🍳</span> Start kokmodus
+                        <span>👨‍🍳</span> Kokmodus
                     </button>
-                    <button class="premium-btn" onclick="openNutritionEstimator()">
-                        <span>📊</span> Næringsinfo
+                    <button class="premium-btn" onclick="openNutritionCalculator()">
+                        <span>🥗</span> Næringsinfo
                     </button>
-                    <button class="premium-btn" onclick="estimateCost()">
+                    <button class="premium-btn" onclick="calculateRecipeCost()">
                         <span>💰</span> Prisestimat
                     </button>
                     <button class="premium-btn" onclick="printRecipe()">
                         <span>🖨️</span> Skriv ut
                     </button>
+                    <button class="premium-btn" onclick="shareRecipe()">
+                        <span>📤</span> Del
+                    </button>
                     <button class="premium-btn" onclick="duplicateRecipe()">
                         <span>📋</span> Dupliser
-                    </button>
-                    <button class="premium-btn" onclick="addCookingTip()">
-                        <span>💡</span> Legg til tips
                     </button>
                 </div>
                 <!-- Social Share -->
@@ -702,7 +702,7 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v4.2.0</p>
+                        <p class="app-version">Familiens Kokebok v4.3.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
                         <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">100% privat - ingen AI lærer av dine oppskrifter</p>
                     </div>
@@ -866,8 +866,16 @@
                         <button class="menu-item" onclick="openCookingDiary(); toggleSideMenu(false);">
                             <span>📅</span> Matkalender
                         </button>
-                        <button class="menu-item" onclick="openNutritionTracker(); toggleSideMenu(false);">
-                            <span>🥗</span> Ernæring
+                        <button class="menu-item" onclick="openNutritionCalculator(); toggleSideMenu(false);">
+                            <span>🥗</span> Næringsinnhold
+                        </button>
+                        <button class="menu-item" onclick="openSeasonalCalendar(); toggleSideMenu(false);">
+                            <span>🌱</span> Sesongkalender
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                        <button class="menu-item" onclick="showVoiceHelp(); toggleSideMenu(false);">
+                            <span>🎤</span> Stemmekommandoer
+                            <span class="menu-badge ai">AI</span>
                         </button>
                     </div>
                 </div>
@@ -879,6 +887,10 @@
                         <span class="menu-section-arrow">▼</span>
                     </div>
                     <div class="menu-section-content">
+                        <button class="menu-item" onclick="openStatsDashboard(); toggleSideMenu(false);">
+                            <span>📈</span> Dashboard
+                            <span class="menu-badge new">NY</span>
+                        </button>
                         <button class="menu-item" onclick="showTopRatedRecipes(); toggleSideMenu(false);">
                             <span>⭐</span> Toppratede
                         </button>
@@ -890,6 +902,29 @@
                         </button>
                         <button class="menu-item" onclick="showAchievements(); toggleSideMenu(false);">
                             <span>🏆</span> Prestasjoner
+                        </button>
+                        <button class="menu-item" onclick="openWasteTracker(); toggleSideMenu(false);">
+                            <span>♻️</span> Matsvinn-tracker
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Daglig - sammenleggbar -->
+                <div class="menu-section collapsible" data-section="daily">
+                    <div class="menu-section-header" onclick="toggleMenuSection('daily')">
+                        <span class="menu-section-title">✨ Daglig</span>
+                        <span class="menu-section-arrow">▼</span>
+                    </div>
+                    <div class="menu-section-content">
+                        <button class="menu-item" onclick="showRecipeOfTheDay(); toggleSideMenu(false);">
+                            <span>⭐</span> Dagens oppskrift
+                        </button>
+                        <button class="menu-item" onclick="showCookingTip(); toggleSideMenu(false);">
+                            <span>💡</span> Dagens tips
+                        </button>
+                        <button class="menu-item" onclick="showAllTips(); toggleSideMenu(false);">
+                            <span>📚</span> Alle kokketips
                         </button>
                     </div>
                 </div>
