@@ -1,5 +1,5 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v4.5.3
+// FAMILIENS KOKEBOK APP v4.5.4
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
 // 100% privat - ingen AI lærer av dine oppskrifter
@@ -834,9 +834,9 @@ async function testGeminiConnection() {
             const errorData = await response.json().catch(() => ({}));
             const errorMsg = errorData.error?.message || 'Ukjent feil';
             
-            if (response.status === 429) {
-                // Rate limit exceeded
-                showToast('⚠️ Gratis kvote brukt opp. Vent litt eller oppgrader til betalt plan på ai.google.dev', 'warning');
+            if (response.status === 429 || errorMsg.includes('quota') || errorMsg.includes('Quota exceeded')) {
+                // Quota exceeded - show detailed modal
+                showGeminiQuotaExceededModal();
             } else if (response.status === 400 && errorMsg.includes('API key')) {
                 showToast('❌ Ugyldig Gemini API-nøkkel', 'error');
             } else if (response.status === 403) {
@@ -851,6 +851,67 @@ async function testGeminiConnection() {
     }
 }
 window.testGeminiConnection = testGeminiConnection;
+
+// Show detailed modal for Gemini quota exceeded
+function showGeminiQuotaExceededModal() {
+    const html = `
+        <div class="quota-exceeded-modal" style="max-width: 600px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="font-size: 3rem; margin-bottom: 12px;">⚠️</div>
+                <h2 style="margin: 0; color: var(--text-primary);">Gemini Gratis Kvote Oppbrukt</h2>
+            </div>
+            
+            <div style="background: var(--card-bg); border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #ff6b6b;">
+                <p style="margin: 0 0 8px 0; font-weight: 600;">Hva skjedde?</p>
+                <p style="margin: 0; opacity: 0.9;">Google Gemini gratis tier har daglige og månedlige grenser. Disse limitene er nå brukt opp.</p>
+            </div>
+            
+            <div style="background: var(--card-bg); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <p style="margin: 0 0 12px 0; font-weight: 600;">📋 Løsningsalternativer:</p>
+                
+                <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,193,7,0.1); border-radius: 8px; border-left: 3px solid #ffc107;">
+                    <strong>1️⃣ Vent til neste dag</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.9rem;">Gratis kvote gjenoppsettes daglig. Kom tilbake i morgen!</p>
+                </div>
+                
+                <div style="margin-bottom: 12px; padding: 12px; background: rgba(76,175,80,0.1); border-radius: 8px; border-left: 3px solid #4caf50;">
+                    <strong>2️⃣ Oppgrader til Gemini Pro</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.9rem;">Få ubegrenset tilgang til Gemini AI (~$20/måned)</p>
+                    <a href="https://ai.google.dev/pricing" target="_blank" style="display: inline-block; margin-top: 6px; padding: 6px 12px; background: #4caf50; color: white; border-radius: 6px; text-decoration: none; font-size: 0.85rem;">Se priser →</a>
+                </div>
+                
+                <div style="margin-bottom: 12px; padding: 12px; background: rgba(33,150,243,0.1); border-radius: 8px; border-left: 3px solid #2196f3;">
+                    <strong>3️⃣ Bruk OpenAI ChatGPT Vision</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.9rem;">Hent API-nøkkel fra OpenAI og bruk deres Vision API</p>
+                    <a href="https://platform.openai.com/api-keys" target="_blank" style="display: inline-block; margin-top: 6px; padding: 6px 12px; background: #2196f3; color: white; border-radius: 6px; text-decoration: none; font-size: 0.85rem;">OpenAI API-keys →</a>
+                </div>
+                
+                <div style="padding: 12px; background: rgba(156,39,176,0.1); border-radius: 8px; border-left: 3px solid #9c27b0;">
+                    <strong>4️⃣ Bruk annen Google-konto</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 0.9rem;">Lag eller bruk en annen Google-konto for ny gratis kvote</p>
+                </div>
+            </div>
+            
+            <div style="background: var(--card-bg); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <p style="margin: 0 0 8px 0; font-weight: 600;">📊 Gratis kvote-info:</p>
+                <ul style="margin: 0; padding-left: 20px; opacity: 0.9; font-size: 0.9rem;">
+                    <li>Gratis tier: 15 forespørsler per minutt</li>
+                    <li>Maks 1 million tokens per dag</li>
+                    <li>Kjørende av daglige og månedlige grenser</li>
+                    <li><a href="https://ai.google.dev/rate-limits" target="_blank" style="color: var(--link-color);">Se alle limitene →</a></li>
+                </ul>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeGenericModal()" style="width: 100%;">Lukk</button>
+                <button class="btn btn-primary" onclick="window.open('https://ai.google.dev/pricing', '_blank')" style="width: 100%;">💳 Oppgrader →</button>
+            </div>
+        </div>
+    `;
+    
+    showModal('⚠️ Gemini Gratis Kvote Oppbrukt', html, []);
+}
+window.showGeminiQuotaExceededModal = showGeminiQuotaExceededModal;
 
 function updateUserInfo() {
     const avatar = $('userAvatar');
@@ -7716,8 +7777,10 @@ Ikke inkluder noen forklaring eller annen tekst - BARE JSON-arrayet.`
         const errorMsg = errorData.error?.message || `Gemini API error: ${response.status}`;
         
         // Check for rate limit / quota exceeded
-        if (response.status === 429 || errorMsg.includes('quota') || errorMsg.includes('rate')) {
-            showToast('⚠️ Gemini gratis kvote brukt opp. Vent noen sekunder og prøv igjen.', 'warning');
+        if (response.status === 429 || errorMsg.includes('quota') || errorMsg.includes('Quota exceeded') || errorMsg.includes('rate')) {
+            // Trigger quota exceeded modal instead of just toast
+            showGeminiQuotaExceededModal();
+            throw new Error('Gemini quota exceeded');
         }
         
         throw new Error(errorMsg);

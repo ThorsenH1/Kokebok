@@ -1,5 +1,5 @@
-// Service Worker for Familiens Kokebok v4.5.3
-const CACHE_NAME = 'kokebok-v4.5.3';
+// Service Worker for Familiens Kokebok v4.5.4
+const CACHE_NAME = 'kokebok-v4.5.4';
 const ASSETS = [
     './',
     './index.html',
