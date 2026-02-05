@@ -1,11 +1,11 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v3.6
+// FAMILIENS KOKEBOK APP v3.6.1
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
 // 100% privat - ingen AI lærer av dine oppskrifter
 // ==========================================
 
-const APP_VERSION = '3.6.0';
+const APP_VERSION = '3.6.1';
 
 // ===== Firebase Initialization =====
 firebase.initializeApp(firebaseConfig);
@@ -277,8 +277,18 @@ async function loadCollection(collection) {
 async function setupAuth() {
     console.log('🔐 Initialiserer autentisering...');
     
+    // Sjekk om vi er i en iframe eller har restriksjoner (iOS Safari)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    
     try {
-        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        // For iOS Safari, bruk SESSION for bedre kompatibilitet
+        if (isIOS || isSafari) {
+            await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+            console.log('📱 iOS/Safari modus - bruker SESSION persistence');
+        } else {
+            await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        }
     } catch (e) {
         console.warn('Kunne ikke sette persistence:', e);
     }
@@ -289,6 +299,8 @@ async function setupAuth() {
         if (result && result.user) {
             console.log('✓ Bruker hentet fra redirect');
             state.user = result.user;
+            // Lagre at vi nettopp logget inn
+            sessionStorage.setItem('kokebok_just_logged_in', 'true');
         }
     } catch (error) {
         // Ignorer redirect-feil hvis bruker ikke kommer fra redirect
@@ -312,13 +324,35 @@ async function setupAuth() {
             prompt: 'select_account'
         });
         
-        // Bruk redirect - fungerer bedre på mobil og unngår popup-problemer
-        try {
-            await auth.signInWithRedirect(provider);
-        } catch (error) {
-            console.error('Login error:', error);
-            showToast('Innlogging feilet. Prøv igjen.', 'error');
-            resetLoginButton(btn);
+        // For iOS - prøv popup først, fall tilbake til redirect
+        if (isIOS || isSafari) {
+            try {
+                // Prøv popup først på iOS
+                const result = await auth.signInWithPopup(provider);
+                if (result.user) {
+                    console.log('✓ Popup login vellykket');
+                    sessionStorage.setItem('kokebok_just_logged_in', 'true');
+                }
+            } catch (popupError) {
+                console.log('Popup feilet, prøver redirect...', popupError.code);
+                // Fall tilbake til redirect
+                try {
+                    await auth.signInWithRedirect(provider);
+                } catch (redirectError) {
+                    console.error('Redirect login feilet:', redirectError);
+                    showToast('Innlogging feilet. Prøv igjen.', 'error');
+                    resetLoginButton(btn);
+                }
+            }
+        } else {
+            // Standard redirect for andre enheter
+            try {
+                await auth.signInWithRedirect(provider);
+            } catch (error) {
+                console.error('Login error:', error);
+                showToast('Innlogging feilet. Prøv igjen.', 'error');
+                resetLoginButton(btn);
+            }
         }
     });
 
@@ -886,6 +920,8 @@ function renderDashboard() {
     renderRecentRecipes();
     renderBooksPreview();
     updateWelcomeMessage();
+    renderRecipeOfTheDay();
+    renderDailyChallenge();
 }
 
 function updateStats() {
@@ -4494,7 +4530,7 @@ function showAchievements() {
     showModal('🏆 Prestasjoner & Nivå', html, []);
 }
 
-// ===== RECIPE OF THE DAY =====
+// ===== RECIPE OF THE DAY - ENHANCED =====
 function getRecipeOfTheDay() {
     if (state.recipes.length === 0) return null;
     
@@ -4504,6 +4540,224 @@ function getRecipeOfTheDay() {
     const index = seed % state.recipes.length;
     
     return state.recipes[index];
+}
+
+function renderRecipeOfTheDay() {
+    const container = $('recipeOfTheDay');
+    const recipe = getRecipeOfTheDay();
+    
+    if (!container || !recipe) {
+        if (container) container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    // Update name
+    const nameEl = $('rotdName');
+    if (nameEl) nameEl.textContent = recipe.name;
+    
+    // Update category
+    const catEl = $('rotdCategory');
+    if (catEl) {
+        const category = state.categories.find(c => c.id === recipe.category);
+        catEl.textContent = category ? `${category.icon} ${category.name}` : '';
+    }
+    
+    // Update image
+    const imgEl = $('rotdImage');
+    if (imgEl) {
+        if (recipe.images && recipe.images.length > 0) {
+            imgEl.innerHTML = `<img src="${recipe.images[0]}" alt="${recipe.name}">`;
+        } else {
+            const category = state.categories.find(c => c.id === recipe.category);
+            imgEl.innerHTML = category?.icon || '🍽️';
+        }
+    }
+    
+    // Update cooking streak
+    const streakEl = $('rotdStreakBadge');
+    if (streakEl) {
+        const cookingStreak = parseInt(localStorage.getItem('kokebok_cooking_streak') || '0');
+        streakEl.textContent = `🔥 ${cookingStreak}`;
+        streakEl.title = `${cookingStreak} dagers cooking streak!`;
+    }
+    
+    // View button
+    const viewBtn = $('viewRotdBtn');
+    if (viewBtn) {
+        viewBtn.onclick = () => viewRecipe(recipe.id);
+    }
+}
+
+function markAsMadeToday() {
+    const recipe = getRecipeOfTheDay();
+    if (!recipe) return;
+    
+    const today = new Date().toDateString();
+    const lastCook = localStorage.getItem('kokebok_last_cook_date');
+    
+    // Update cooking streak
+    if (lastCook !== today) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        let streak = parseInt(localStorage.getItem('kokebok_cooking_streak') || '0');
+        
+        if (lastCook === yesterday.toDateString()) {
+            streak++;
+        } else if (lastCook !== today) {
+            streak = 1;
+        }
+        
+        localStorage.setItem('kokebok_cooking_streak', streak.toString());
+        localStorage.setItem('kokebok_last_cook_date', today);
+        
+        // Track cooked recipes count
+        const cookedCount = parseInt(localStorage.getItem('kokebok_total_cooked') || '0') + 1;
+        localStorage.setItem('kokebok_total_cooked', cookedCount.toString());
+        
+        // Award XP
+        addXP(15, 'Laget dagens oppskrift');
+        
+        // Check cooking achievements
+        const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+        if (cookedCount >= 1 && !earned.includes('firstCook')) unlockAchievement('firstCook');
+        if (cookedCount >= 10 && !earned.includes('tenCooks')) unlockAchievement('tenCooks');
+        if (cookedCount >= 50 && !earned.includes('fiftyCooks')) unlockAchievement('fiftyCooks');
+        
+        // Weekend chef
+        const day = new Date().getDay();
+        if ((day === 0 || day === 6) && !earned.includes('weekendChef')) {
+            unlockAchievement('weekendChef');
+        }
+        
+        showToast(`🎉 Laget "${recipe.name}"! ${streak > 1 ? `${streak} dagers streak!` : ''}`, 'success');
+        triggerConfetti();
+        
+        // Update UI
+        renderRecipeOfTheDay();
+    } else {
+        showToast('Du har allerede markert dagens oppskrift som laget!', 'info');
+    }
+}
+window.markAsMadeToday = markAsMadeToday;
+
+// ===== DAILY CHALLENGES =====
+const dailyChallenges = [
+    { id: 'search', text: 'Søk etter 3 nye oppskrifter', xp: 25, check: () => parseInt(sessionStorage.getItem('searches_today') || '0') >= 3 },
+    { id: 'plan', text: 'Planlegg minst 2 måltider denne uken', xp: 30, check: () => Object.keys(state.mealPlan).length >= 2 },
+    { id: 'shop', text: 'Legg til 5 ingredienser i handlelisten', xp: 20, check: () => state.shoppingList.length >= 5 },
+    { id: 'add', text: 'Legg til en ny oppskrift', xp: 35, check: () => {
+        const addedToday = localStorage.getItem('kokebok_added_recipe_today');
+        return addedToday === new Date().toDateString();
+    }},
+    { id: 'favorite', text: 'Marker en oppskrift som favoritt', xp: 15, check: () => state.favorites.length > 0 },
+    { id: 'random', text: 'Prøv en tilfeldig oppskrift', xp: 20, check: () => sessionStorage.getItem('tried_random') === 'true' },
+    { id: 'measure', text: 'Bruk mål- og vektkalkulatoren', xp: 15, check: () => sessionStorage.getItem('used_calculator') === 'true' },
+    { id: 'cook', text: 'Marker dagens oppskrift som laget', xp: 25, check: () => localStorage.getItem('kokebok_last_cook_date') === new Date().toDateString() }
+];
+
+function getDailyChallenge() {
+    const today = new Date();
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    const index = seed % dailyChallenges.length;
+    return dailyChallenges[index];
+}
+
+function renderDailyChallenge() {
+    const container = $('dailyChallengeCard');
+    if (!container) return;
+    
+    const challenge = getDailyChallenge();
+    const completedToday = localStorage.getItem('kokebok_challenge_completed') === new Date().toDateString();
+    
+    container.style.display = 'block';
+    
+    const textEl = $('challengeText');
+    if (textEl) textEl.textContent = challenge.text;
+    
+    const btn = $('completeChallengeBtn');
+    if (btn) {
+        if (completedToday) {
+            btn.textContent = '✅ Fullført!';
+            btn.disabled = true;
+            btn.classList.add('completed');
+        } else {
+            btn.textContent = 'Fullfør utfordring';
+            btn.disabled = false;
+            btn.classList.remove('completed');
+        }
+    }
+    
+    // Update reward display
+    const rewardEl = container.querySelector('.reward-xp');
+    if (rewardEl) rewardEl.textContent = `+${challenge.xp} XP`;
+}
+
+function completeChallenge() {
+    const challenge = getDailyChallenge();
+    const today = new Date().toDateString();
+    
+    if (localStorage.getItem('kokebok_challenge_completed') === today) {
+        showToast('Du har allerede fullført dagens utfordring!', 'info');
+        return;
+    }
+    
+    if (challenge.check()) {
+        localStorage.setItem('kokebok_challenge_completed', today);
+        addXP(challenge.xp, 'Daglig utfordring');
+        showToast(`🎯 Utfordring fullført! +${challenge.xp} XP`, 'success');
+        triggerConfetti();
+        renderDailyChallenge();
+    } else {
+        showToast('Du har ikke fullført utfordringen ennå!', 'warning');
+    }
+}
+window.completeChallenge = completeChallenge;
+
+// ===== MOTIVATIONAL QUOTES =====
+const motivationalQuotes = [
+    { text: "God mat bringer folk sammen.", author: "Ukjent" },
+    { text: "Matlaging er kjærlighet gjort synlig.", author: "Ukjent" },
+    { text: "Hemmeligheten til god mat er kjærlighet og tid.", author: "Bestemor" },
+    { text: "Ingenting sier 'jeg elsker deg' som hjemmelaget mat.", author: "Ukjent" },
+    { text: "Familieoppskrifter er kjærlighet videreført.", author: "Ukjent" },
+    { text: "Det beste krydderet er hunger.", author: "Cervantes" },
+    { text: "Livet er for kort til dårlig mat.", author: "Ukjent" },
+    { text: "Ett måltid om gangen - det er slik familier bygges.", author: "Ukjent" },
+    { text: "Minner lages rundt matbordet.", author: "Ukjent" },
+    { text: "Velkommen til kjøkkenet - her skapes magi!", author: "Ukjent" }
+];
+
+function getMotivationalQuote() {
+    const today = new Date();
+    const index = (today.getFullYear() + today.getMonth() + today.getDate()) % motivationalQuotes.length;
+    return motivationalQuotes[index];
+}
+
+// ===== COOKING TIPS OF THE DAY =====
+const dailyCookingTips = [
+    "🧂 Salt pastavannet godt - det skal smake som havet!",
+    "🧈 La smøret bli romtemperert før baking for bedre resultat.",
+    "🧅 Gråt du av løk? Legg den i fryseren 15 min før kutting.",
+    "🍝 Spar litt pastavann - det gjør sausen silkemyk!",
+    "🥩 La kjøttet hvile etter steking - det blir mer saftig.",
+    "🧄 Knus hvitløken med knivbladet for enklere skreling.",
+    "🥚 Ferske egg synker i vann - gamle flyter.",
+    "🍋 Rul sitronen før pressing for mer juice.",
+    "🥕 Frys urter i olivenolje i isbrettformen.",
+    "🧀 Riv ost kaldt - den klumper seg mindre.",
+    "🍲 Tilsett alltid smak mot slutten av kokingen.",
+    "🌿 Ferske urter tilsettes til slutt, tørkede i starten.",
+    "🍳 Varm pannen godt før du tilsetter olje.",
+    "🥗 Tørk salaten godt - dressing fester bedre på tørre blader."
+];
+
+function getDailyCookingTip() {
+    const today = new Date();
+    const index = (today.getDate() + today.getMonth()) % dailyCookingTips.length;
+    return dailyCookingTips[index];
 }
 
 // ===== DARK MODE SCHEDULE =====
@@ -6072,6 +6326,10 @@ window.getPlayerLevel = getPlayerLevel;
 window.addXP = addXP;
 window.updateDailyStreak = updateDailyStreak;
 window.unlockAchievement = unlockAchievement;
+window.renderRecipeOfTheDay = renderRecipeOfTheDay;
+window.renderDailyChallenge = renderDailyChallenge;
+window.getDailyCookingTip = getDailyCookingTip;
+window.getMotivationalQuote = getMotivationalQuote;
 
 // ===== URL RECIPE IMPORT =====
 async function openUrlImport() {

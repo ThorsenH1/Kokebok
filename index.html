@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=3.5.1">
+    <link rel="stylesheet" href="style.css?v=3.6.1">
 </head>
 <body>
     <!-- Login Screen -->
@@ -105,13 +105,38 @@
                     <div class="welcome-icon">📖</div>
                 </div>
 
-                <!-- Recipe of the Day -->
-                <div id="recipeOfTheDay" class="recipe-of-day-card" style="display: none;">
-                    <div class="rotd-badge">⭐ Dagens oppskrift</div>
-                    <div class="rotd-content">
-                        <span class="rotd-name" id="rotdName">-</span>
-                        <button class="rotd-btn" id="viewRotdBtn">Se oppskrift →</button>
+                <!-- Recipe of the Day - Premium Card -->
+                <div id="recipeOfTheDay" class="recipe-of-day-premium" style="display: none;">
+                    <div class="rotd-header">
+                        <div class="rotd-badge-premium">⭐ DAGENS OPPSKRIFT</div>
+                        <div class="rotd-streak-badge" id="rotdStreakBadge">🔥 0</div>
                     </div>
+                    <div class="rotd-body">
+                        <div class="rotd-image" id="rotdImage">🍽️</div>
+                        <div class="rotd-info">
+                            <span class="rotd-name-premium" id="rotdName">-</span>
+                            <span class="rotd-category" id="rotdCategory"></span>
+                        </div>
+                    </div>
+                    <div class="rotd-actions">
+                        <button class="rotd-btn-primary" id="viewRotdBtn">👀 Se oppskrift</button>
+                        <button class="rotd-btn-secondary" onclick="markAsMadeToday()">✅ Laget i dag</button>
+                    </div>
+                </div>
+
+                <!-- Daily Challenge Card -->
+                <div id="dailyChallengeCard" class="daily-challenge-card" style="display: none;">
+                    <div class="challenge-header">
+                        <span class="challenge-icon">🎯</span>
+                        <span class="challenge-title">Dagens utfordring</span>
+                    </div>
+                    <div class="challenge-content">
+                        <p id="challengeText">-</p>
+                        <div class="challenge-reward">
+                            <span class="reward-xp">+25 XP</span>
+                        </div>
+                    </div>
+                    <button class="challenge-btn" id="completeChallengeBtn" onclick="completeChallenge()">Fullfør utfordring</button>
                 </div>
 
                 <!-- Quick Actions - Primary Row -->
@@ -1072,7 +1097,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-config.js?v=3.2"></script>
-    <script src="app.js?v=3.5.1"></script>
+    <script src="firebase-config.js?v=3.6"></script>
+    <script src="app.js?v=3.6.1"></script>
 </body>
 </html>
