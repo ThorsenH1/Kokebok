@@ -43,6 +43,19 @@
                 Logg inn med Google
             </button>
             <p class="login-hint">🔒 Din data er privat og sikker</p>
+            
+            <!-- Feilsøkingstips -->
+            <div class="login-troubleshoot" id="loginTroubleshoot" style="display: none;">
+                <p class="troubleshoot-title">⚠️ Problemer med innlogging?</p>
+                <ul class="troubleshoot-list">
+                    <li>Deaktiver adblocker (uBlock, AdBlock, etc.)</li>
+                    <li>Tillat popups for denne siden</li>
+                    <li>Prøv inkognitomodus (Ctrl+Shift+N)</li>
+                    <li>Sjekk at cookies er aktivert</li>
+                </ul>
+                <button class="btn-retry" onclick="window.location.reload()">🔄 Prøv på nytt</button>
+            </div>
+            
             <div class="login-features">
                 <div class="feature-item">
                     <span class="feature-icon">📸</span>
@@ -925,6 +938,44 @@
                         </button>
                         <button class="menu-item" onclick="showAllTips(); toggleSideMenu(false);">
                             <span>📚</span> Alle kokketips
+                        </button>
+                        <button class="menu-item" onclick="showWeeklyReport(); toggleSideMenu(false);">
+                            <span>📊</span> Ukerapport
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Verktøy - sammenleggbar -->
+                <div class="menu-section collapsible" data-section="tools">
+                    <div class="menu-section-header" onclick="toggleMenuSection('tools')">
+                        <span class="menu-section-title">🛠️ Verktøy</span>
+                        <span class="menu-section-arrow">▼</span>
+                    </div>
+                    <div class="menu-section-content">
+                        <button class="menu-item" onclick="openCollections(); toggleSideMenu(false);">
+                            <span>📁</span> Mine samlinger
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                        <button class="menu-item" onclick="openSubstitutionFinder(); toggleSideMenu(false);">
+                            <span>🔄</span> Ingrediens-erstatter
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                        <button class="menu-item" onclick="openTemperatureConverter(); toggleSideMenu(false);">
+                            <span>🌡️</span> Temperaturomregner
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                        <button class="menu-item" onclick="openBatchCookingPlanner(); toggleSideMenu(false);">
+                            <span>🍲</span> Batch Cooking
+                            <span class="menu-badge new">NY</span>
+                        </button>
+                        <button class="menu-item" onclick="openSmartShopping(); toggleSideMenu(false);">
+                            <span>🧠</span> Smart Handlehjelp
+                            <span class="menu-badge ai">AI</span>
+                        </button>
+                        <button class="menu-item" onclick="openQuickAdd(); toggleSideMenu(false);">
+                            <span>➕</span> Hurtigregistrering
+                            <span class="menu-badge new">NY</span>
                         </button>
                     </div>
                 </div>
