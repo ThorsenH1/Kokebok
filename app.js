@@ -1,11 +1,11 @@
 // ==========================================
-// FAMILIENS KOKEBOK APP v3.4
+// FAMILIENS KOKEBOK APP v3.6
 // Firebase-basert med Google Auth
 // Digitaliser gamle kokebøker og oppskrifter
 // 100% privat - ingen AI lærer av dine oppskrifter
 // ==========================================
 
-const APP_VERSION = '3.4.0';
+const APP_VERSION = '3.6.0';
 
 // ===== Firebase Initialization =====
 firebase.initializeApp(firebaseConfig);
@@ -135,7 +135,9 @@ const state = {
     pickerDate: null,
     pickerTab: 'mine',
     // Saved external recipes (from API)
-    savedExternalRecipes: []
+    savedExternalRecipes: [],
+    // Portion scaling state
+    portionScale: 1
 };
 
 // ===== DOM Helpers =====
@@ -168,6 +170,26 @@ function getCategoryIcon(categoryId) {
     return category?.icon || '📝';
 }
 
+// Helper to get ingredients as string (handles both array and string format)
+function getIngredientsAsString(ingredients) {
+    if (!ingredients) return '';
+    if (Array.isArray(ingredients)) {
+        return ingredients.join('\n');
+    }
+    if (typeof ingredients === 'object') {
+        return Object.values(ingredients).join('\n');
+    }
+    return String(ingredients);
+}
+
+// Helper to get shopping item name as string
+function getItemName(item) {
+    if (!item) return '';
+    if (typeof item === 'string') return item;
+    if (typeof item === 'object' && item.name) return String(item.name);
+    return String(item);
+}
+
 // View a recipe by ID - used by modals and quick actions
 function viewRecipe(recipeId) {
     const recipe = state.recipes.find(r => r.id === recipeId);
@@ -176,6 +198,7 @@ function viewRecipe(recipeId) {
         return;
     }
     state.currentRecipe = recipe;
+    state.portionScale = 1; // Reset portion scale when viewing new recipe
     closeGenericModal();
     navigateTo('recipeView');
 }
@@ -1111,6 +1134,10 @@ function renderRecipeView() {
     const category = state.categories.find(c => c.id === recipe.category);
     const book = recipe.bookId ? state.books.find(b => b.id === recipe.bookId) : null;
     
+    // Parse original servings for scaling
+    const originalServings = parseServings(recipe.servings);
+    const currentScale = state.portionScale || 1;
+    
     // Images gallery
     let imagesHtml = '';
     if (recipe.images && recipe.images.length > 0) {
@@ -1125,10 +1152,16 @@ function renderRecipeView() {
     
     // Details
     const details = [];
-    if (recipe.servings) details.push(`<div class="detail-item">👥 ${escapeHtml(recipe.servings)}</div>`);
+    if (recipe.servings) {
+        const scaledServings = originalServings ? Math.round(originalServings * currentScale) : recipe.servings;
+        details.push(`<div class="detail-item">👥 ${typeof scaledServings === 'number' ? scaledServings + ' porsjoner' : escapeHtml(recipe.servings)}</div>`);
+    }
     if (recipe.prepTime) details.push(`<div class="detail-item">⏱️ ${escapeHtml(recipe.prepTime)}</div>`);
     if (category) details.push(`<div class="detail-item">${category.icon} ${category.name}</div>`);
     if (book) details.push(`<div class="detail-item">📚 ${escapeHtml(book.name)}</div>`);
+    
+    // Scale ingredients
+    const scaledIngredients = scaleIngredients(recipe.ingredients, currentScale);
     
     container.innerHTML = `
         <div class="recipe-header">
@@ -1142,8 +1175,28 @@ function renderRecipeView() {
         
         ${recipe.ingredients ? `
             <div class="recipe-section">
-                <h3>🥄 Ingredienser</h3>
-                <pre>${escapeHtml(recipe.ingredients)}</pre>
+                <div class="section-header-with-controls">
+                    <h3>🥄 Ingredienser</h3>
+                    <div class="portion-scaler">
+                        <button class="scale-btn" onclick="adjustPortions(-0.5)" ${currentScale <= 0.5 ? 'disabled' : ''}>−</button>
+                        <span class="scale-display">
+                            <span class="scale-value">${currentScale === 1 ? 'Original' : (currentScale * 100) + '%'}</span>
+                            ${originalServings ? `<span class="scale-portions">(${Math.round(originalServings * currentScale)} pers)</span>` : ''}
+                        </span>
+                        <button class="scale-btn" onclick="adjustPortions(0.5)">+</button>
+                    </div>
+                </div>
+                <div class="quick-scale-buttons">
+                    <button class="quick-scale ${currentScale === 0.5 ? 'active' : ''}" onclick="setPortionScale(0.5)">½×</button>
+                    <button class="quick-scale ${currentScale === 1 ? 'active' : ''}" onclick="setPortionScale(1)">1×</button>
+                    <button class="quick-scale ${currentScale === 1.5 ? 'active' : ''}" onclick="setPortionScale(1.5)">1½×</button>
+                    <button class="quick-scale ${currentScale === 2 ? 'active' : ''}" onclick="setPortionScale(2)">2×</button>
+                    <button class="quick-scale ${currentScale === 3 ? 'active' : ''}" onclick="setPortionScale(3)">3×</button>
+                </div>
+                <pre class="scaled-ingredients">${escapeHtml(scaledIngredients)}</pre>
+                <button class="btn btn-secondary btn-small" onclick="addScaledToShoppingList()">
+                    🛒 Legg til i handleliste
+                </button>
             </div>
         ` : ''}
         
@@ -1175,6 +1228,112 @@ function renderRecipeView() {
         });
     });
 }
+
+// ===== PORTION SCALING FUNCTIONS =====
+function parseServings(servingsStr) {
+    if (!servingsStr) return null;
+    const match = String(servingsStr).match(/(\d+)/);
+    return match ? parseInt(match[1]) : null;
+}
+
+function scaleIngredients(ingredients, scale) {
+    if (!ingredients || scale === 1) return ingredients;
+    
+    const ingredientStr = getIngredientsAsString(ingredients);
+    const lines = ingredientStr.split('\n');
+    
+    return lines.map(line => {
+        // Match numbers (including decimals and fractions) at the start of lines or after spaces
+        return line.replace(/(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?)\s*(dl|l|ml|g|kg|ss|ts|stk|kopp|gram|kilo|liter|desiliter|spiseskje|teskje)?/gi, 
+            (match, num, unit) => {
+                let value = parseNumber(num);
+                if (isNaN(value)) return match;
+                
+                let scaled = value * scale;
+                
+                // Format nicely
+                if (scaled === Math.floor(scaled)) {
+                    scaled = scaled.toString();
+                } else if (scaled * 2 === Math.floor(scaled * 2)) {
+                    // Check for common fractions
+                    const whole = Math.floor(scaled);
+                    const frac = scaled - whole;
+                    if (frac === 0.5) scaled = whole > 0 ? `${whole}½` : '½';
+                    else scaled = scaled.toFixed(1).replace('.', ',');
+                } else {
+                    scaled = scaled.toFixed(1).replace('.', ',');
+                }
+                
+                return unit ? `${scaled} ${unit}` : scaled;
+            }
+        );
+    }).join('\n');
+}
+
+function parseNumber(str) {
+    if (!str) return NaN;
+    str = String(str).trim();
+    
+    // Handle fractions like "1/2" or "1 / 2"
+    if (str.includes('/')) {
+        const parts = str.split('/').map(p => parseFloat(p.trim().replace(',', '.')));
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            return parts[0] / parts[1];
+        }
+    }
+    
+    // Handle decimal with comma
+    return parseFloat(str.replace(',', '.'));
+}
+
+function adjustPortions(delta) {
+    state.portionScale = Math.max(0.5, (state.portionScale || 1) + delta);
+    renderRecipeView();
+    
+    // Track achievement
+    const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    if (!earned.includes('portionScaler')) {
+        unlockAchievement('portionScaler');
+    }
+}
+window.adjustPortions = adjustPortions;
+
+function setPortionScale(scale) {
+    state.portionScale = scale;
+    renderRecipeView();
+    
+    // Track achievement
+    const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    if (!earned.includes('portionScaler')) {
+        unlockAchievement('portionScaler');
+    }
+}
+window.setPortionScale = setPortionScale;
+
+function addScaledToShoppingList() {
+    if (!state.currentRecipe || !state.currentRecipe.ingredients) return;
+    
+    const scale = state.portionScale || 1;
+    const scaledIngredients = scaleIngredients(state.currentRecipe.ingredients, scale);
+    const lines = scaledIngredients.split('\n').filter(l => l.trim());
+    
+    let added = 0;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed && !state.shoppingList.some(item => getItemName(item).toLowerCase() === trimmed.toLowerCase())) {
+            state.shoppingList.push({ name: trimmed, checked: false, addedAt: new Date() });
+            added++;
+        }
+    }
+    
+    if (added > 0) {
+        saveShoppingList();
+        showToast(`${added} ingrediens${added > 1 ? 'er' : ''} lagt til i handlelisten!`, 'success');
+    } else {
+        showToast('Alle ingredienser er allerede i listen', 'info');
+    }
+}
+window.addScaledToShoppingList = addScaledToShoppingList;
 
 // ===== Recipe Editor =====
 function openRecipeEditor(recipe = null) {
@@ -3700,7 +3859,7 @@ function estimateNutrition(recipe) {
     if (!container) return;
     
     // Simple estimation based on common ingredients
-    const ingredients = (recipe.ingredients || '').toLowerCase();
+    const ingredients = getIngredientsAsString(recipe.ingredients).toLowerCase();
     let calories = 300;
     let protein = 15;
     let carbs = 30;
@@ -3953,7 +4112,7 @@ function setupVoiceControl() {
 function estimateCost() {
     if (!state.currentRecipe) return;
     
-    const ingredients = (state.currentRecipe.ingredients || '').toLowerCase();
+    const ingredients = getIngredientsAsString(state.currentRecipe.ingredients).toLowerCase();
     let cost = 50; // Base cost
     
     // Norwegian price estimates
@@ -3990,31 +4149,234 @@ async function shareToSocial(platform) {
     }
 }
 
-// ===== ACHIEVEMENTS SYSTEM =====
+// ===== ACHIEVEMENTS SYSTEM - EXPANDED =====
 const achievements = {
-    firstRecipe: { name: 'Første oppskrift', icon: '🎉', desc: 'La til din første oppskrift' },
-    fiveRecipes: { name: 'Matentusiast', icon: '👨‍🍳', desc: '5 oppskrifter i samlingen' },
-    tenRecipes: { name: 'Kokebok-mester', icon: '📚', desc: '10 oppskrifter i samlingen' },
-    firstBook: { name: 'Bokskaper', icon: '📖', desc: 'Opprettet din første kokebok' },
-    mealPlanner: { name: 'Planlegger', icon: '📅', desc: 'Planla en hel uke' },
-    shoppingPro: { name: 'Handleproff', icon: '🛒', desc: 'Brukte handlelisten' }
+    // Oppskrift-milestones
+    firstRecipe: { name: 'Første oppskrift', icon: '🎉', desc: 'La til din første oppskrift', xp: 10 },
+    fiveRecipes: { name: 'Matentusiast', icon: '👨‍🍳', desc: '5 oppskrifter i samlingen', xp: 25 },
+    tenRecipes: { name: 'Kokebok-mester', icon: '📚', desc: '10 oppskrifter i samlingen', xp: 50 },
+    twentyFiveRecipes: { name: 'Oppskrift-samler', icon: '📖', desc: '25 oppskrifter i samlingen', xp: 100 },
+    fiftyRecipes: { name: 'Kokebokforfatter', icon: '✍️', desc: '50 oppskrifter - imponerende!', xp: 200 },
+    hundredRecipes: { name: 'Mesterkok', icon: '👑', desc: '100 oppskrifter - du er legendarisk!', xp: 500 },
+    
+    // Kategorier
+    firstBook: { name: 'Bokskaper', icon: '📕', desc: 'Opprettet din første kokebok', xp: 15 },
+    fiveBooks: { name: 'Biblioteksjef', icon: '📚', desc: '5 kokebøker - godt organisert!', xp: 40 },
+    allCategories: { name: 'Allsidig kokk', icon: '🌈', desc: 'Oppskrifter i alle kategorier', xp: 75 },
+    
+    // Planlegging & handleliste
+    mealPlanner: { name: 'Planlegger', icon: '📅', desc: 'Planla en hel uke', xp: 30 },
+    shoppingPro: { name: 'Handleproff', icon: '🛒', desc: 'Brukte handlelisten', xp: 10 },
+    smartShopper: { name: 'Smart handler', icon: '🧠', desc: 'Brukte smart handleliste', xp: 20 },
+    bulkShopper: { name: 'Storhandler', icon: '🛍️', desc: '20+ varer på handlelisten', xp: 25 },
+    
+    // Matlaging & koking
+    firstCook: { name: 'Første rett', icon: '🍳', desc: 'Lagde første oppskrift', xp: 15 },
+    tenCooks: { name: 'Kjøkkensjef', icon: '👩‍🍳', desc: 'Lagde 10 oppskrifter', xp: 50 },
+    fiftyCooks: { name: 'Profesjonell kokk', icon: '🏆', desc: 'Lagde 50 oppskrifter', xp: 150 },
+    
+    // Spesielle kategorier
+    dessertMaster: { name: 'Dessertkonge', icon: '🍰', desc: '10 desserter i samlingen', xp: 40 },
+    breakfastHero: { name: 'Frokost-helt', icon: '🥐', desc: '10 frokost-oppskrifter', xp: 40 },
+    dinnerChamp: { name: 'Middagsmester', icon: '🍖', desc: '15 middags-oppskrifter', xp: 50 },
+    vegetarianPro: { name: 'Grønn gourmet', icon: '🥗', desc: '10 vegetariske oppskrifter', xp: 45 },
+    
+    // Sosiale & deling
+    firstShare: { name: 'Deleglede', icon: '📤', desc: 'Delte første oppskrift', xp: 15 },
+    firstImport: { name: 'Importør', icon: '📥', desc: 'Importerte en oppskrift', xp: 10 },
+    urlImporter: { name: 'Nettfinner', icon: '🌐', desc: 'Importerte fra URL', xp: 20 },
+    
+    // Daglig bruk
+    dailyUser: { name: 'Daglig bruker', icon: '📆', desc: 'Brukte appen 7 dager på rad', xp: 35 },
+    weeklyStreak: { name: 'Ukes-streak', icon: '🔥', desc: '2 uker daglig bruk', xp: 75 },
+    monthlyStreak: { name: 'Måneds-streak', icon: '⚡', desc: '30 dager daglig bruk', xp: 200 },
+    
+    // Premium-funksjoner
+    nutritionTracker: { name: 'Næringsfokusert', icon: '🥬', desc: 'Brukte næringsberegner', xp: 15 },
+    costCalculator: { name: 'Budsjettmester', icon: '💰', desc: 'Brukte kostnadsberegner', xp: 15 },
+    mealPrepPro: { name: 'Meal prep-proff', icon: '📦', desc: 'Laget en meal prep-plan', xp: 25 },
+    portionScaler: { name: 'Porsjonsmester', icon: '⚖️', desc: 'Skalerte en oppskrift', xp: 15 },
+    
+    // Søk & oppdagelse
+    explorerBronze: { name: 'Utforsker', icon: '🔍', desc: 'Søkte 10 ganger', xp: 15 },
+    explorerSilver: { name: 'Oppdager', icon: '🗺️', desc: 'Søkte 50 ganger', xp: 40 },
+    explorerGold: { name: 'Kartlegger', icon: '🧭', desc: 'Søkte 100 ganger', xp: 100 },
+    
+    // Spesielle prestasjoner
+    nightOwl: { name: 'Nattugle', icon: '🦉', desc: 'Brukte appen etter midnatt', xp: 10 },
+    earlyBird: { name: 'Morgenfugl', icon: '🐦', desc: 'Brukte appen før kl. 06', xp: 10 },
+    weekendChef: { name: 'Helgekokk', icon: '🎊', desc: 'Lagde mat i helgen', xp: 15 },
+    
+    // Level-baserte
+    levelFive: { name: 'Nivå 5', icon: '⭐', desc: 'Nådde nivå 5', xp: 0 },
+    levelTen: { name: 'Nivå 10', icon: '🌟', desc: 'Nådde nivå 10 - erfaren!', xp: 0 },
+    levelTwentyFive: { name: 'Nivå 25', icon: '💫', desc: 'Nådde nivå 25 - ekspert!', xp: 0 },
+    levelFifty: { name: 'Nivå 50', icon: '👑', desc: 'Nådde nivå 50 - legende!', xp: 0 }
 };
+
+// XP og level-system
+function getPlayerLevel() {
+    const xp = parseInt(localStorage.getItem('kokebok_xp') || '0');
+    // Level formula: level = floor(sqrt(xp / 10))
+    const level = Math.floor(Math.sqrt(xp / 10));
+    const currentLevelXP = level * level * 10;
+    const nextLevelXP = (level + 1) * (level + 1) * 10;
+    const progress = ((xp - currentLevelXP) / (nextLevelXP - currentLevelXP)) * 100;
+    
+    return { level, xp, currentLevelXP, nextLevelXP, progress };
+}
+
+function addXP(amount, reason = '') {
+    const currentXP = parseInt(localStorage.getItem('kokebok_xp') || '0');
+    const oldLevel = getPlayerLevel().level;
+    
+    const newXP = currentXP + amount;
+    localStorage.setItem('kokebok_xp', newXP.toString());
+    
+    const newLevel = getPlayerLevel().level;
+    
+    // Show XP gain notification
+    if (amount > 0) {
+        showXPGain(amount, reason);
+    }
+    
+    // Check for level up
+    if (newLevel > oldLevel) {
+        showLevelUp(newLevel);
+        checkLevelAchievements(newLevel);
+    }
+}
+
+function showXPGain(amount, reason) {
+    const popup = document.createElement('div');
+    popup.className = 'xp-popup';
+    popup.innerHTML = `+${amount} XP ${reason ? `(${reason})` : ''}`;
+    document.body.appendChild(popup);
+    setTimeout(() => popup.remove(), 2000);
+}
+
+function showLevelUp(level) {
+    const popup = document.createElement('div');
+    popup.className = 'level-up-popup';
+    popup.innerHTML = `
+        <div class="level-up-icon">🎉</div>
+        <div class="level-up-text">
+            <strong>NIVÅ OPP!</strong>
+            <span>Du er nå nivå ${level}</span>
+        </div>
+    `;
+    document.body.appendChild(popup);
+    triggerConfetti();
+    setTimeout(() => popup.remove(), 4000);
+}
+
+function checkLevelAchievements(level) {
+    const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    if (level >= 5 && !earned.includes('levelFive')) unlockAchievement('levelFive');
+    if (level >= 10 && !earned.includes('levelTen')) unlockAchievement('levelTen');
+    if (level >= 25 && !earned.includes('levelTwentyFive')) unlockAchievement('levelTwentyFive');
+    if (level >= 50 && !earned.includes('levelFifty')) unlockAchievement('levelFifty');
+}
+
+function updateDailyStreak() {
+    const today = new Date().toDateString();
+    const lastVisit = localStorage.getItem('kokebok_last_visit');
+    const streak = parseInt(localStorage.getItem('kokebok_streak') || '0');
+    
+    if (lastVisit !== today) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        if (lastVisit === yesterday.toDateString()) {
+            // Fortsetter streak
+            const newStreak = streak + 1;
+            localStorage.setItem('kokebok_streak', newStreak.toString());
+            
+            // Sjekk streak-achievements
+            const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+            if (newStreak >= 7 && !earned.includes('dailyUser')) unlockAchievement('dailyUser');
+            if (newStreak >= 14 && !earned.includes('weeklyStreak')) unlockAchievement('weeklyStreak');
+            if (newStreak >= 30 && !earned.includes('monthlyStreak')) unlockAchievement('monthlyStreak');
+            
+            // Gi bonus XP for streak
+            if (newStreak > 1) {
+                addXP(Math.min(newStreak, 10), `${newStreak}-dagers streak`);
+            }
+        } else if (lastVisit) {
+            // Streak brutt
+            localStorage.setItem('kokebok_streak', '1');
+        } else {
+            // Første besøk
+            localStorage.setItem('kokebok_streak', '1');
+        }
+        
+        localStorage.setItem('kokebok_last_visit', today);
+    }
+    
+    // Sjekk time-baserte achievements
+    const hour = new Date().getHours();
+    const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    if (hour >= 0 && hour < 5 && !earned.includes('nightOwl')) unlockAchievement('nightOwl');
+    if (hour >= 5 && hour < 7 && !earned.includes('earlyBird')) unlockAchievement('earlyBird');
+    
+    const day = new Date().getDay();
+    if ((day === 0 || day === 6) && !earned.includes('weekendChef')) {
+        // Vil sjekkes når de lager mat i helgen
+    }
+}
 
 function checkAchievements() {
     const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
     
-    if (state.recipes.length >= 1 && !earned.includes('firstRecipe')) {
-        unlockAchievement('firstRecipe');
+    // Oppskrift-milestones
+    if (state.recipes.length >= 1 && !earned.includes('firstRecipe')) unlockAchievement('firstRecipe');
+    if (state.recipes.length >= 5 && !earned.includes('fiveRecipes')) unlockAchievement('fiveRecipes');
+    if (state.recipes.length >= 10 && !earned.includes('tenRecipes')) unlockAchievement('tenRecipes');
+    if (state.recipes.length >= 25 && !earned.includes('twentyFiveRecipes')) unlockAchievement('twentyFiveRecipes');
+    if (state.recipes.length >= 50 && !earned.includes('fiftyRecipes')) unlockAchievement('fiftyRecipes');
+    if (state.recipes.length >= 100 && !earned.includes('hundredRecipes')) unlockAchievement('hundredRecipes');
+    
+    // Bok-achievements
+    if (state.books.length >= 1 && !earned.includes('firstBook')) unlockAchievement('firstBook');
+    if (state.books.length >= 5 && !earned.includes('fiveBooks')) unlockAchievement('fiveBooks');
+    
+    // Kategori-sjekk
+    const usedCategories = new Set(state.recipes.map(r => r.category).filter(c => c));
+    if (usedCategories.size >= state.categories.length && !earned.includes('allCategories')) {
+        unlockAchievement('allCategories');
     }
-    if (state.recipes.length >= 5 && !earned.includes('fiveRecipes')) {
-        unlockAchievement('fiveRecipes');
+    
+    // Handleliste
+    if (state.shoppingList.length >= 20 && !earned.includes('bulkShopper')) {
+        unlockAchievement('bulkShopper');
     }
-    if (state.recipes.length >= 10 && !earned.includes('tenRecipes')) {
-        unlockAchievement('tenRecipes');
-    }
-    if (state.books.length >= 1 && !earned.includes('firstBook')) {
-        unlockAchievement('firstBook');
-    }
+    
+    // Kategori-spesifikke (sjekk tags eller kategorinavn)
+    const desserts = state.recipes.filter(r => 
+        r.category === 'dessert' || 
+        (r.tags && r.tags.some(t => /dessert|kake|is|søtt/i.test(t)))
+    );
+    if (desserts.length >= 10 && !earned.includes('dessertMaster')) unlockAchievement('dessertMaster');
+    
+    const breakfasts = state.recipes.filter(r => 
+        r.category === 'frokost' || 
+        (r.tags && r.tags.some(t => /frokost|morgen/i.test(t)))
+    );
+    if (breakfasts.length >= 10 && !earned.includes('breakfastHero')) unlockAchievement('breakfastHero');
+    
+    const dinners = state.recipes.filter(r => 
+        r.category === 'middag' || 
+        (r.tags && r.tags.some(t => /middag|hovedrett/i.test(t)))
+    );
+    if (dinners.length >= 15 && !earned.includes('dinnerChamp')) unlockAchievement('dinnerChamp');
+    
+    const vegetarian = state.recipes.filter(r => 
+        r.tags && r.tags.some(t => /vegetar|vegan|grønn/i.test(t))
+    );
+    if (vegetarian.length >= 10 && !earned.includes('vegetarianPro')) unlockAchievement('vegetarianPro');
+    
+    // Oppdater daily streak
+    updateDailyStreak();
 }
 
 function unlockAchievement(id) {
@@ -4022,8 +4384,15 @@ function unlockAchievement(id) {
     if (!achievement) return;
     
     const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    if (earned.includes(id)) return; // Already earned
+    
     earned.push(id);
     localStorage.setItem('kokebok_achievements', JSON.stringify(earned));
+    
+    // Add XP for achievement
+    if (achievement.xp > 0) {
+        addXP(achievement.xp, achievement.name);
+    }
     
     // Show achievement popup
     const popup = document.createElement('div');
@@ -4033,6 +4402,7 @@ function unlockAchievement(id) {
         <div class="achievement-text">
             <strong>🏆 Prestasjon låst opp!</strong>
             <span>${achievement.name}</span>
+            ${achievement.xp > 0 ? `<span class="achievement-xp">+${achievement.xp} XP</span>` : ''}
         </div>
     `;
     document.body.appendChild(popup);
@@ -4044,21 +4414,84 @@ function unlockAchievement(id) {
 
 function showAchievements() {
     const earned = JSON.parse(localStorage.getItem('kokebok_achievements') || '[]');
+    const playerInfo = getPlayerLevel();
     
-    let html = '<div class="achievements-grid">';
-    for (const [id, ach] of Object.entries(achievements)) {
-        const unlocked = earned.includes(id);
+    // Kategoriser achievements
+    const categories = {
+        'Oppskrifter': ['firstRecipe', 'fiveRecipes', 'tenRecipes', 'twentyFiveRecipes', 'fiftyRecipes', 'hundredRecipes'],
+        'Kategorier': ['firstBook', 'fiveBooks', 'allCategories'],
+        'Matlaging': ['firstCook', 'tenCooks', 'fiftyCooks', 'dessertMaster', 'breakfastHero', 'dinnerChamp', 'vegetarianPro'],
+        'Planlegging': ['mealPlanner', 'shoppingPro', 'smartShopper', 'bulkShopper'],
+        'Funksjoner': ['nutritionTracker', 'costCalculator', 'mealPrepPro', 'portionScaler', 'firstShare', 'firstImport', 'urlImporter'],
+        'Utforsking': ['explorerBronze', 'explorerSilver', 'explorerGold'],
+        'Streaks': ['dailyUser', 'weeklyStreak', 'monthlyStreak', 'nightOwl', 'earlyBird', 'weekendChef'],
+        'Nivåer': ['levelFive', 'levelTen', 'levelTwentyFive', 'levelFifty']
+    };
+    
+    const streak = parseInt(localStorage.getItem('kokebok_streak') || '0');
+    const totalXP = Object.entries(achievements)
+        .filter(([id]) => earned.includes(id))
+        .reduce((sum, [_, ach]) => sum + (ach.xp || 0), 0);
+    
+    let html = `
+        <div class="achievements-header">
+            <div class="player-level-card">
+                <div class="level-badge">
+                    <span class="level-number">${playerInfo.level}</span>
+                    <span class="level-label">NIVÅ</span>
+                </div>
+                <div class="level-details">
+                    <div class="xp-bar">
+                        <div class="xp-fill" style="width: ${playerInfo.progress}%"></div>
+                    </div>
+                    <span class="xp-text">${playerInfo.xp} / ${playerInfo.nextLevelXP} XP</span>
+                </div>
+            </div>
+            <div class="achievement-stats-row">
+                <div class="ach-stat">
+                    <span class="ach-stat-value">${earned.length}</span>
+                    <span class="ach-stat-label">Opplåst</span>
+                </div>
+                <div class="ach-stat">
+                    <span class="ach-stat-value">${Object.keys(achievements).length}</span>
+                    <span class="ach-stat-label">Totalt</span>
+                </div>
+                <div class="ach-stat">
+                    <span class="ach-stat-value">🔥 ${streak}</span>
+                    <span class="ach-stat-label">Streak</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    for (const [catName, achIds] of Object.entries(categories)) {
+        const catAchievements = achIds.map(id => ({ id, ...achievements[id] })).filter(a => a.name);
+        const unlockedInCat = catAchievements.filter(a => earned.includes(a.id)).length;
+        
         html += `
-            <div class="achievement-card ${unlocked ? 'unlocked' : 'locked'}">
-                <span class="achievement-icon">${unlocked ? ach.icon : '🔒'}</span>
-                <span class="achievement-name">${ach.name}</span>
-                <span class="achievement-desc">${ach.desc}</span>
+            <div class="achievement-category">
+                <h4 class="ach-cat-header">
+                    ${catName}
+                    <span class="ach-cat-progress">${unlockedInCat}/${catAchievements.length}</span>
+                </h4>
+                <div class="achievements-grid">
+                    ${catAchievements.map(ach => {
+                        const unlocked = earned.includes(ach.id);
+                        return `
+                            <div class="achievement-card ${unlocked ? 'unlocked' : 'locked'}">
+                                <span class="achievement-icon">${unlocked ? ach.icon : '🔒'}</span>
+                                <span class="achievement-name">${ach.name}</span>
+                                <span class="achievement-desc">${ach.desc}</span>
+                                ${ach.xp > 0 ? `<span class="achievement-xp-badge">${ach.xp} XP</span>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
             </div>
         `;
     }
-    html += '</div>';
     
-    showModal('🏆 Prestasjoner', html, []);
+    showModal('🏆 Prestasjoner & Nivå', html, []);
 }
 
 // ===== RECIPE OF THE DAY =====
@@ -5118,7 +5551,7 @@ function optimizeGroceryList() {
     };
     
     for (const item of state.shoppingList) {
-        const name = (item.name || item).toLowerCase();
+        const name = getItemName(item).toLowerCase();
         let dept = 'Annet';
         
         if (/eple|banan|tomat|gulrot|løk|salat|agurk|paprika|frukt|grønn|potet|brokkoli/.test(name)) {
@@ -5635,6 +6068,10 @@ window.openWhatCanIMake = openWhatCanIMake;
 window.showHouseholdSelector = showHouseholdSelector;
 window.showTopRatedRecipes = showTopRatedRecipes;
 window.openQuickRecipeFromText = openQuickRecipeFromText;
+window.getPlayerLevel = getPlayerLevel;
+window.addXP = addXP;
+window.updateDailyStreak = updateDailyStreak;
+window.unlockAchievement = unlockAchievement;
 
 // ===== URL RECIPE IMPORT =====
 async function openUrlImport() {
@@ -5908,7 +6345,8 @@ function saveImportedRecipe(encodedData) {
     
     showToast('Oppskrift importert!', 'success');
     closeGenericModal();
-    renderRecipes();
+    renderRecipeList();
+    renderDashboard();
     checkAchievements();
 }
 window.saveImportedRecipe = saveImportedRecipe;
@@ -6034,83 +6472,92 @@ function openMeasurementCalculator() {
     
     const html = `
         <div class="measurement-calculator">
+            <div class="calc-header">
+                <span class="calc-header-icon">📐</span>
+                <h3>Mål & Vekt Kalkulator</h3>
+                <p>Konverter enkelt mellom ulike måleenheter</p>
+            </div>
+            
             <div class="calc-tabs">
                 <button class="calc-tab active" onclick="switchCalcTab('convert')">🔄 Regn om</button>
-                <button class="calc-tab" onclick="switchCalcTab('weight')">⚖️ Vekt til mengde</button>
+                <button class="calc-tab" onclick="switchCalcTab('weight')">⚖️ Frukt & grønt</button>
                 <button class="calc-tab" onclick="switchCalcTab('tools')">📐 Verktøy</button>
             </div>
             
             <div id="calcTabContent">
                 <div id="convertTab" class="calc-content active">
-                    <h4>Regn om ingrediens</h4>
-                    <p>Velg ingrediens og skriv inn mengde:</p>
+                    <div class="calc-section-title">🥄 Ingrediens-kalkulator</div>
+                    <p class="calc-section-desc">Velg ingrediens og skriv inn mengde i ett felt - resten beregnes automatisk</p>
                     
                     <div class="calc-row">
                         <select id="calcIngredient" onchange="updateCalculation()">
-                            <option value="">Velg ingrediens...</option>
+                            <option value="">📋 Velg ingrediens...</option>
                             ${ingredientOptions}
                         </select>
                     </div>
                     
                     <div class="calc-input-grid">
                         <div class="calc-input-item">
-                            <label>Gram</label>
+                            <label>GRAM</label>
                             <input type="number" id="calcGram" placeholder="0" oninput="calcFromGram()">
                         </div>
                         <div class="calc-input-item">
-                            <label>Desiliter</label>
+                            <label>DESILITER</label>
                             <input type="number" id="calcDl" placeholder="0" step="0.1" oninput="calcFromDl()">
                         </div>
                         <div class="calc-input-item">
-                            <label>Spiseskje</label>
+                            <label>SPISESKJE</label>
                             <input type="number" id="calcSs" placeholder="0" step="0.5" oninput="calcFromSs()">
                         </div>
                         <div class="calc-input-item">
-                            <label>Teskje</label>
+                            <label>TESKJE</label>
                             <input type="number" id="calcTs" placeholder="0" step="0.5" oninput="calcFromTs()">
                         </div>
                         <div class="calc-input-item">
-                            <label>Kopp (2.5 dl)</label>
+                            <label>KOPP (2.5 DL)</label>
                             <input type="number" id="calcKopp" placeholder="0" step="0.25" oninput="calcFromKopp()">
                         </div>
                         <div class="calc-input-item">
-                            <label>US Cup</label>
+                            <label>US CUP</label>
                             <input type="number" id="calcCup" placeholder="0" step="0.25" oninput="calcFromCup()">
                         </div>
                     </div>
                 </div>
                 
                 <div id="weightTab" class="calc-content">
-                    <h4>Vekt til mengde (frukt & grønt)</h4>
-                    <p>Lurer du på hvor mye du trenger i antall?</p>
+                    <div class="calc-section-title">🥕 Vekt til mengde</div>
+                    <p class="calc-section-desc">Finn ut hvor mange stykker du trenger basert på vekt</p>
                     
                     <div class="calc-row">
                         <select id="produceSelect" onchange="updateProduceCalc()">
-                            <option value="">Velg råvare...</option>
+                            <option value="">📋 Velg råvare...</option>
                             ${produceOptions}
                         </select>
                     </div>
                     
                     <div class="produce-calc-row">
                         <div class="produce-input">
-                            <label>Gram</label>
-                            <input type="number" id="produceGram" placeholder="0" oninput="calcProduceFromGram()">
+                            <label>GRAM</label>
+                            <input type="number" id="produceGram" placeholder="500" oninput="calcProduceFromGram()">
                         </div>
-                        <span class="calc-equals">=</span>
+                        <span class="calc-equals">→</span>
                         <div class="produce-result">
                             <span id="produceAmount">0</span>
                             <span id="produceUnit">stk</span>
                         </div>
                     </div>
                     
-                    <div id="produceInfo" class="produce-info"></div>
+                    <div id="produceInfo" class="produce-info">
+                        <p class="produce-avg">Velg en råvare for å se gjennomsnittsvekt</p>
+                    </div>
                 </div>
                 
                 <div id="toolsTab" class="calc-content">
-                    <h4>Mål, vekt og temperatur</h4>
+                    <div class="calc-section-title">🔧 Konverteringsverktøy</div>
+                    <p class="calc-section-desc">Konverter mellom vekt, volum og temperatur</p>
                     
                     <div class="tool-section">
-                        <h5>⚖️ Vekt</h5>
+                        <h5>⚖️ Vekt-konvertering</h5>
                         <div class="tool-row">
                             <input type="number" id="toolGram" placeholder="1000" value="1000" oninput="convertWeight()">
                             <span>g =</span>
@@ -6122,7 +6569,7 @@ function openMeasurementCalculator() {
                     </div>
                     
                     <div class="tool-section">
-                        <h5>🥛 Volum</h5>
+                        <h5>🥛 Volum-konvertering</h5>
                         <div class="tool-row">
                             <input type="number" id="toolMl" placeholder="1000" value="1000" oninput="convertVolume()">
                             <span>ml =</span>
@@ -6134,7 +6581,7 @@ function openMeasurementCalculator() {
                     </div>
                     
                     <div class="tool-section">
-                        <h5>🌡️ Temperatur</h5>
+                        <h5>🌡️ Temperatur-konvertering</h5>
                         <div class="tool-row">
                             <input type="number" id="toolCelsius" placeholder="180" value="180" oninput="convertTemp()">
                             <span>°C =</span>
@@ -6156,27 +6603,45 @@ function openMeasurementCalculator() {
                         <div class="ref-grid">
                             <div class="ref-item">
                                 <span class="ref-icon">🥄</span>
-                                <span>1 ss = 15 ml</span>
+                                <div class="ref-text">
+                                    <strong>1 ss</strong>
+                                    <span>= 15 ml</span>
+                                </div>
                             </div>
                             <div class="ref-item">
                                 <span class="ref-icon">🥄</span>
-                                <span>1 ts = 5 ml</span>
+                                <div class="ref-text">
+                                    <strong>1 ts</strong>
+                                    <span>= 5 ml</span>
+                                </div>
                             </div>
                             <div class="ref-item">
                                 <span class="ref-icon">☕</span>
-                                <span>1 kopp = 2.5 dl</span>
+                                <div class="ref-text">
+                                    <strong>1 kopp</strong>
+                                    <span>= 2.5 dl</span>
+                                </div>
                             </div>
                             <div class="ref-item">
                                 <span class="ref-icon">🇺🇸</span>
-                                <span>1 US cup = 2.37 dl</span>
+                                <div class="ref-text">
+                                    <strong>1 US cup</strong>
+                                    <span>= 2.37 dl</span>
+                                </div>
                             </div>
                             <div class="ref-item">
-                                <span class="ref-icon">🇺🇸</span>
-                                <span>1 oz = 28.35 g</span>
+                                <span class="ref-icon">⚖️</span>
+                                <div class="ref-text">
+                                    <strong>1 oz</strong>
+                                    <span>= 28.35 g</span>
+                                </div>
                             </div>
                             <div class="ref-item">
-                                <span class="ref-icon">🇺🇸</span>
-                                <span>1 lb = 453.6 g</span>
+                                <span class="ref-icon">⚖️</span>
+                                <div class="ref-text">
+                                    <strong>1 lb</strong>
+                                    <span>= 453.6 g</span>
+                                </div>
                             </div>
                         </div>
                     </div>
