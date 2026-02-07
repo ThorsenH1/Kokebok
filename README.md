@@ -228,7 +228,9 @@ Har du spørsmål eller problemer? Opprett et issue på GitHub!
 
 ## 📜 Lisens
 
-MIT License - Fri bruk og modifikasjon.
+Opphavsrett (c) 2026. Alle rettigheter reservert.
+
+Koden og innholdet i dette prosjektet kan ikke kopieres, distribueres, endres eller brukes kommersielt uten skriftlig tillatelse og/eller gyldig lisensavtale. Kontakt utvikler for lisensiering.
 
 ---
 
