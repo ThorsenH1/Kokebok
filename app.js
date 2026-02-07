@@ -120,7 +120,9 @@ const state = {
         pushNotifications: true,
         friendNotifications: true,
         shareNotifications: true,
-        reminderNotifications: true
+        reminderNotifications: true,
+        // Gamification mode - disabled by default for simple experience
+        gamificationEnabled: false
     },
     currentView: 'dashboardView',
     currentRecipe: null,
@@ -503,10 +505,12 @@ async function initApp() {
         updateUserInfo();
         restoreMenuSectionStates();
         
-        // v4.0 - Load social data and update badge
-        loadSocialData().then(() => {
-            updateFriendNotificationBadge();
-        });
+        // v4.0 - Load social data only if gamification is enabled
+        if (state.settings.gamificationEnabled) {
+            loadSocialData().then(() => {
+                updateFriendNotificationBadge();
+            });
+        }
         
         // v4.1 - Check expiring items and request push permission
         setTimeout(() => {
@@ -718,7 +722,84 @@ function applySettings() {
             geminiKeyInput.value = savedGeminiKey;
         }
     }
+    
+    // Gamification mode toggle
+    const gamificationToggle = $('gamificationToggle');
+    if (gamificationToggle) {
+        gamificationToggle.checked = state.settings.gamificationEnabled || false;
+    }
+    
+    // Apply gamification visibility
+    applyGamificationMode();
 }
+
+// Toggle gamification features visibility
+function applyGamificationMode() {
+    const enabled = state.settings.gamificationEnabled || false;
+    
+    // Elements to show/hide based on gamification mode
+    const gamificationElements = [
+        'achievementsBanner',      // Achievements banner on dashboard
+        'dailyChallengeCard',      // Daily challenge card
+        'socialCard',              // Friends & leaderboard card
+        'xpDisplay',               // XP/Level display
+        'streakDisplay'            // Streak display
+    ];
+    
+    // Toggle visibility for each element
+    gamificationElements.forEach(id => {
+        const el = $(id);
+        if (el) {
+            el.style.display = enabled ? '' : 'none';
+        }
+    });
+    
+    // Also toggle by class
+    document.querySelectorAll('.gamification-feature').forEach(el => {
+        el.style.display = enabled ? '' : 'none';
+    });
+    
+    // Show/hide gamification-related settings section
+    const gamificationSettingsSection = $('gamificationSettingsSection');
+    if (gamificationSettingsSection) {
+        // Show the content inside but keep section visible
+        const content = gamificationSettingsSection.querySelector('.gamification-settings-content');
+        if (content) {
+            content.style.display = enabled ? '' : 'none';
+        }
+    }
+    
+    // Toggle body class for CSS-based hiding
+    document.body.classList.toggle('gamification-enabled', enabled);
+    document.body.classList.toggle('gamification-disabled', !enabled);
+    
+    console.log(`🎮 Gamification mode: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+}
+window.applyGamificationMode = applyGamificationMode;
+
+// Toggle gamification and save
+function toggleGamification(enabled) {
+    state.settings.gamificationEnabled = enabled;
+    applyGamificationMode();
+    saveSettings();
+    
+    if (enabled) {
+        showToast('🎮 Spillmodus aktivert! Nyt prestasjoner, utfordringer og toppliste.', 'success');
+        triggerConfetti();
+        
+        // Load social data when gamification is enabled
+        loadSocialData().then(() => {
+            updateFriendNotificationBadge();
+            updatePublicProfile();
+        });
+    } else {
+        showToast('📝 Enkel modus aktivert. Fokus på oppskrifter.', 'info');
+    }
+    
+    // Re-render dashboard to update
+    renderDashboard();
+}
+window.toggleGamification = toggleGamification;
 
 // v4.2 - Save OpenAI API Key
 function saveOpenAIKey() {
@@ -1290,9 +1371,17 @@ function renderDashboard() {
     renderBooksPreview();
     updateWelcomeMessage();
     renderRecipeOfTheDay();
-    renderDailyChallenge();
-    updateSocialCard();
+    
+    // Gamification features - only render if enabled
+    if (state.settings.gamificationEnabled) {
+        renderDailyChallenge();
+        updateSocialCard();
+    }
+    
     updateKitchenCard(); // v4.1
+    
+    // Ensure gamification visibility is correct
+    applyGamificationMode();
 }
 
 function updateStats() {
@@ -4739,6 +4828,9 @@ function getPlayerLevel() {
 }
 
 function addXP(amount, reason = '') {
+    // Only add XP if gamification is enabled
+    if (!state.settings.gamificationEnabled) return;
+    
     const currentXP = parseInt(localStorage.getItem('kokebok_xp') || '0');
     const oldLevel = getPlayerLevel().level;
     
@@ -4892,6 +4984,9 @@ function checkAchievements() {
 }
 
 function unlockAchievement(id) {
+    // Only unlock achievements if gamification is enabled
+    if (!state.settings.gamificationEnabled) return;
+    
     const achievement = achievements[id];
     if (!achievement) return;
     

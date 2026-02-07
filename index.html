@@ -141,8 +141,8 @@
                     </div>
                 </div>
 
-                <!-- Daily Challenge Card -->
-                <div id="dailyChallengeCard" class="daily-challenge-card" style="display: none;">
+                <!-- Daily Challenge Card (Gamification) -->
+                <div id="dailyChallengeCard" class="daily-challenge-card gamification-feature" style="display: none;">
                     <div class="challenge-header">
                         <span class="challenge-icon">🎯</span>
                         <span class="challenge-title">Dagens utfordring</span>
@@ -217,15 +217,15 @@
                     </div>
                 </div>
 
-                <!-- Achievements Banner -->
-                <div class="achievements-banner" onclick="showAchievements()">
+                <!-- Achievements Banner (Gamification) -->
+                <div id="achievementsBanner" class="achievements-banner gamification-feature" onclick="showAchievements()">
                     <span class="achievements-icon">🏆</span>
                     <span class="achievements-text">Se dine prestasjoner</span>
                     <span class="achievements-arrow">→</span>
                 </div>
 
-                <!-- Social Card (v4.0) -->
-                <div id="socialCard" class="social-card" onclick="openFriendsPanel()">
+                <!-- Social Card (v4.0) - Gamification -->
+                <div id="socialCard" class="social-card gamification-feature" onclick="openFriendsPanel()">
                     <div class="social-card-header">
                         <span class="social-icon">👥</span>
                         <span class="social-title">Venner & Toppliste</span>
@@ -587,6 +587,27 @@
                         </button>
                     </div>
 
+                    <!-- Gamification Mode Section - NEW -->
+                    <div class="settings-section gamification-mode-section">
+                        <h3>🎮 Spillmodus</h3>
+                        <div class="gamification-promo">
+                            <p class="setting-hint" style="margin-bottom: 12px;">
+                                <strong>Enkel modus (standard):</strong> Fokuser på det viktigste – oppskriftene dine.
+                            </p>
+                            <p class="setting-hint" style="margin-bottom: 12px;">
+                                <strong>Spillmodus:</strong> Aktiver prestasjoner, daglige utfordringer, venner, toppliste, XP og nivåer! 🏆
+                            </p>
+                        </div>
+                        <div class="setting-item">
+                            <span class="setting-label">Aktiver spillmodus</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="gamificationToggle" onchange="toggleGamification(this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <p class="setting-hint">Inkluderer: Prestasjoner, utfordringer, venner, toppliste, XP-system og daglige streaks</p>
+                    </div>
+
                     <div class="settings-section">
                         <h3>🎨 Utseende</h3>
                         <div class="setting-item">
@@ -710,8 +731,12 @@
                         <p class="setting-hint">Alternativ til Gemini. Krever betalt OpenAI-konto.</p>
                     </div>
 
-                    <div class="settings-section">
+                    <!-- Social Settings - Only shown when gamification is enabled -->
+                    <div id="gamificationSettingsSection" class="settings-section gamification-feature">
                         <h3>👥 Sosiale innstillinger</h3>
+                        <p class="setting-hint" style="margin-bottom: 12px; color: var(--accent-color);">
+                            ℹ️ Disse innstillingene er aktive fordi spillmodus er på
+                        </p>
                         <div class="setting-item">
                             <span class="setting-label">Offentlig profil</span>
                             <label class="toggle">
@@ -738,7 +763,7 @@
 
                     <div class="settings-section">
                         <h3>ℹ️ Om</h3>
-                        <p class="app-version">Familiens Kokebok v4.5.4</p>
+                        <p class="app-version">Familiens Kokebok v4.6.0</p>
                         <p class="app-credit">Laget med ❤️ for å bevare familietradisjoner</p>
                         <p class="app-credit" style="margin-top: 8px; font-size: 0.8rem;">100% privat - ingen AI lærer av dine oppskrifter</p>
                     </div>
