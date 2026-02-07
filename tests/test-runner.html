@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kokebok Test Suite - v4.6.0</title>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --card-bg: #16213e;
+            --text-color: #eee;
+            --success-color: #00d26a;
+            --error-color: #ff4757;
+            --warning-color: #ffa502;
+            --info-color: #3742fa;
+            --border-color: #0f3460;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            color: #888;
+            font-size: 0.9em;
+        }
+        
+        .version-badge {
+            display: inline-block;
+            background: var(--info-color);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: var(--error-color);
+            color: white;
+        }
+        
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+        
+        .summary-card .number {
+            font-size: 2.5em;
+            font-weight: bold;
+            line-height: 1;
+        }
+        
+        .summary-card .label {
+            font-size: 0.85em;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        .summary-card.total .number { color: var(--info-color); }
+        .summary-card.passed .number { color: var(--success-color); }
+        .summary-card.failed .number { color: var(--error-color); }
+        .summary-card.skipped .number { color: var(--warning-color); }
+        
+        .progress-container {
+            margin-bottom: 30px;
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background: var(--card-bg);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success-color), #00ff88);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #888;
+        }
+        
+        .test-category {
+            background: var(--card-bg);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+        
+        .category-header {
+            padding: 15px 20px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .category-header:hover {
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .category-title {
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        
+        .category-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9em;
+        }
+        
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .stat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .stat-dot.passed { background: var(--success-color); }
+        .stat-dot.failed { background: var(--error-color); }
+        
+        .category-tests {
+            padding: 0;
+            display: none;
+        }
+        
+        .category-tests.expanded {
+            display: block;
+        }
+        
+        .test-item {
+            padding: 12px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .test-status {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .test-status.passed {
+            background: rgba(0, 210, 106, 0.2);
+            color: var(--success-color);
+        }
+        
+        .test-status.failed {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--error-color);
+        }
+        
+        .test-status.running {
+            background: rgba(55, 66, 250, 0.2);
+            color: var(--info-color);
+            animation: pulse 1s infinite;
+        }
+        
+        .test-status.pending {
+            background: rgba(255,255,255,0.1);
+            color: #666;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .test-name {
+            flex: 1;
+        }
+        
+        .test-duration {
+            color: #666;
+            font-size: 0.85em;
+        }
+        
+        .test-error {
+            background: rgba(255, 71, 87, 0.1);
+            border-left: 3px solid var(--error-color);
+            padding: 10px 15px;
+            margin: 10px 20px;
+            border-radius: 0 8px 8px 0;
+            font-family: monospace;
+            font-size: 0.85em;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .log-output {
+            background: #0d1117;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85em;
+            line-height: 1.6;
+        }
+        
+        .log-output h3 {
+            margin-bottom: 15px;
+            color: #888;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .log-line {
+            padding: 3px 0;
+        }
+        
+        .log-line.success { color: var(--success-color); }
+        .log-line.error { color: var(--error-color); }
+        .log-line.info { color: var(--info-color); }
+        .log-line.warning { color: var(--warning-color); }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            cursor: pointer;
+        }
+        
+        .filter-btn.active {
+            background: var(--info-color);
+            border-color: var(--info-color);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .empty-state .icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 30px;
+            border-top: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧪 Kokebok Test Suite <span class="version-badge">v4.6.0</span></h1>
+        <p class="subtitle">Avansert testing for Familiens Kokebok</p>
+    </div>
+    
+    <div class="controls">
+        <button class="btn-primary" onclick="runAllTests()">▶ Kjør alle tester</button>
+        <button class="btn-secondary" onclick="runUnitTests()">📋 Unit Tests</button>
+        <button class="btn-secondary" onclick="runIntegrationTests()">🔗 Integration Tests</button>
+        <button class="btn-secondary" onclick="runE2ETests()">🌐 E2E Tests</button>
+        <button class="btn-secondary" onclick="runSecurityTests()">🔒 Security Tests</button>
+        <button class="btn-secondary" onclick="runPerformanceTests()">⚡ Performance Tests</button>
+        <button class="btn-secondary" onclick="clearResults()">🗑 Tøm resultater</button>
+    </div>
+    
+    <div class="summary" id="summary" style="display: none;">
+        <div class="summary-card total">
+            <div class="number" id="total-count">0</div>
+            <div class="label">Totalt</div>
+        </div>
+        <div class="summary-card passed">
+            <div class="number" id="passed-count">0</div>
+            <div class="label">Bestått</div>
+        </div>
+        <div class="summary-card failed">
+            <div class="number" id="failed-count">0</div>
+            <div class="label">Feilet</div>
+        </div>
+        <div class="summary-card skipped">
+            <div class="number" id="duration">0ms</div>
+            <div class="label">Tid</div>
+        </div>
+    </div>
+    
+    <div class="progress-container" id="progress-container" style="display: none;">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-text" id="progress-text">Starter tester...</div>
+    </div>
+    
+    <div class="filter-buttons" id="filters" style="display: none;">
+        <button class="filter-btn active" onclick="filterTests('all')">Alle</button>
+        <button class="filter-btn" onclick="filterTests('passed')">✓ Bestått</button>
+        <button class="filter-btn" onclick="filterTests('failed')">✗ Feilet</button>
+    </div>
+    
+    <div id="results">
+        <div class="empty-state" id="empty-state">
+            <div class="icon">🧪</div>
+            <h2>Klar til testing</h2>
+            <p>Klikk "Kjør alle tester" for å starte</p>
+        </div>
+    </div>
+    
+    <div class="log-output" id="log-output" style="display: none;">
+        <h3>📝 Logg</h3>
+        <div id="log-content"></div>
+    </div>
+    
+    <footer>
+        <p>Familiens Kokebok Test Suite • Utviklet for kvalitetssikring</p>
+    </footer>
+    
+    <!-- Load test framework and tests -->
+    <script src="test-suite.js"></script>
+    <script src="unit-tests.js"></script>
+    <script src="integration-tests.js"></script>
+    <script src="e2e-tests.js"></script>
+    <script src="security-tests.js"></script>
+    <script src="performance-tests.js"></script>
+    
+    <script>
+        let allResults = [];
+        let currentFilter = 'all';
+        
+        function log(message, type = 'info') {
+            const logContent = document.getElementById('log-content');
+            const line = document.createElement('div');
+            line.className = `log-line ${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContent.appendChild(line);
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+        
+        function updateSummary(results) {
+            const total = results.length;
+            const passed = results.filter(r => r.passed).length;
+            const failed = results.filter(r => !r.passed).length;
+            const duration = results.reduce((sum, r) => sum + (r.duration || 0), 0);
+            
+            document.getElementById('total-count').textContent = total;
+            document.getElementById('passed-count').textContent = passed;
+            document.getElementById('failed-count').textContent = failed;
+            document.getElementById('duration').textContent = `${duration}ms`;
+            document.getElementById('summary').style.display = 'grid';
+        }
+        
+        function updateProgress(current, total, testName) {
+            const percent = Math.round((current / total) * 100);
+            document.getElementById('progress-fill').style.width = `${percent}%`;
+            document.getElementById('progress-text').textContent = 
+                `${current}/${total} - ${testName}`;
+        }
+        
+        function renderResults(results) {
+            const container = document.getElementById('results');
+            container.innerHTML = '';
+            
+            // Group by category
+            const grouped = {};
+            results.forEach(r => {
+                const cat = r.category || 'Ukategorisert';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(r);
+            });
+            
+            Object.entries(grouped).forEach(([category, tests]) => {
+                const filteredTests = currentFilter === 'all' 
+                    ? tests 
+                    : tests.filter(t => currentFilter === 'passed' ? t.passed : !t.passed);
+                
+                if (filteredTests.length === 0 && currentFilter !== 'all') return;
+                
+                const passed = tests.filter(t => t.passed).length;
+                const failed = tests.filter(t => !t.passed).length;
+                
+                const categoryEl = document.createElement('div');
+                categoryEl.className = 'test-category';
+                
+                categoryEl.innerHTML = `
+                    <div class="category-header" onclick="toggleCategory(this)">
+                        <span class="category-title">${category}</span>
+                        <div class="category-stats">
+                            <span class="stat">
+                                <span class="stat-dot passed"></span>
+                                ${passed}
+                            </span>
+                            <span class="stat">
+                                <span class="stat-dot failed"></span>
+                                ${failed}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="category-tests ${failed > 0 ? 'expanded' : ''}">
+                        ${filteredTests.map(test => `
+                            <div class="test-item">
+                                <div class="test-status ${test.passed ? 'passed' : 'failed'}">
+                                    ${test.passed ? '✓' : '✗'}
+                                </div>
+                                <div class="test-name">${test.name}</div>
+                                <div class="test-duration">${test.duration}ms</div>
+                            </div>
+                            ${!test.passed && test.error ? `
+                                <div class="test-error">${test.error}</div>
+                            ` : ''}
+                        `).join('')}
+                    </div>
+                `;
+                
+                container.appendChild(categoryEl);
+            });
+            
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('filters').style.display = 'flex';
+        }
+        
+        function toggleCategory(header) {
+            const tests = header.nextElementSibling;
+            tests.classList.toggle('expanded');
+        }
+        
+        function filterTests(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase().includes(filter) || 
+                    (filter === 'all' && btn.textContent === 'Alle'));
+            });
+            renderResults(allResults);
+        }
+        
+        async function runSuite(suite, name) {
+            log(`Starter ${name}...`, 'info');
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('log-output').style.display = 'block';
+            
+            const results = await suite.runAll((current, total, testName, passed) => {
+                updateProgress(current, total, testName);
+                log(`${passed ? '✓' : '✗'} ${testName}`, passed ? 'success' : 'error');
+            });
+            
+            return results;
+        }
+        
+        async function runUnitTests() {
+            if (typeof unitTestSuite === 'undefined') {
+                log('Unit tests ikke lastet!', 'error');
+                return;
+            }
+            const results = await runSuite(unitTestSuite, 'Unit Tests');
+            allResults = results;
+            updateSummary(results);
+            renderResults(results);
+        }
+        
+        async function runIntegrationTests() {
+            if (typeof integrationTestSuite === 'undefined') {
+                log('Integration tests ikke lastet!', 'error');
+                return;
+            }
+            const results = await runSuite(integrationTestSuite, 'Integration Tests');
+            allResults = results;
+            updateSummary(results);
+            renderResults(results);
+        }
+        
+        async function runE2ETests() {
+            if (typeof e2eTestSuite === 'undefined') {
+                log('E2E tests ikke lastet!', 'error');
+                return;
+            }
+            const results = await runSuite(e2eTestSuite, 'E2E Tests');
+            allResults = results;
+            updateSummary(results);
+            renderResults(results);
+        }
+        
+        async function runSecurityTests() {
+            if (typeof securityTestSuite === 'undefined') {
+                log('Security tests ikke lastet!', 'error');
+                return;
+            }
+            const results = await runSuite(securityTestSuite, 'Security Tests');
+            allResults = results;
+            updateSummary(results);
+            renderResults(results);
+        }
+        
+        async function runPerformanceTests() {
+            if (typeof performanceTestSuite === 'undefined') {
+                log('Performance tests ikke lastet!', 'error');
+                return;
+            }
+            const results = await runSuite(performanceTestSuite, 'Performance Tests');
+            allResults = results;
+            updateSummary(results);
+            renderResults(results);
+        }
+        
+        async function runAllTests() {
+            log('Kjører alle test suites...', 'info');
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('log-output').style.display = 'block';
+            
+            allResults = [];
+            const startTime = Date.now();
+            
+            // Run each suite
+            if (typeof unitTestSuite !== 'undefined') {
+                const unitResults = await unitTestSuite.runAll((current, total, testName, passed) => {
+                    log(`[Unit] ${passed ? '✓' : '✗'} ${testName}`, passed ? 'success' : 'error');
+                });
+                allResults = allResults.concat(unitResults);
+            }
+            
+            if (typeof integrationTestSuite !== 'undefined') {
+                const integrationResults = await integrationTestSuite.runAll((current, total, testName, passed) => {
+                    log(`[Integration] ${passed ? '✓' : '✗'} ${testName}`, passed ? 'success' : 'error');
+                });
+                allResults = allResults.concat(integrationResults);
+            }
+            
+            if (typeof e2eTestSuite !== 'undefined') {
+                const e2eResults = await e2eTestSuite.runAll((current, total, testName, passed) => {
+                    log(`[E2E] ${passed ? '✓' : '✗'} ${testName}`, passed ? 'success' : 'error');
+                });
+                allResults = allResults.concat(e2eResults);
+            }
+            
+            if (typeof securityTestSuite !== 'undefined') {
+                const securityResults = await securityTestSuite.runAll((current, total, testName, passed) => {
+                    log(`[Security] ${passed ? '✓' : '✗'} ${testName}`, passed ? 'success' : 'error');
+                });
+                allResults = allResults.concat(securityResults);
+            }
+            
+            if (typeof performanceTestSuite !== 'undefined') {
+                const performanceResults = await performanceTestSuite.runAll((current, total, testName, passed) => {
+                    log(`[Performance] ${passed ? '✓' : '✗'} ${testName}`, passed ? 'success' : 'error');
+                });
+                allResults = allResults.concat(performanceResults);
+            }
+            
+            const totalTime = Date.now() - startTime;
+            
+            updateSummary(allResults);
+            renderResults(allResults);
+            
+            const passed = allResults.filter(r => r.passed).length;
+            const failed = allResults.filter(r => !r.passed).length;
+            
+            log(`\n========== OPPSUMMERING ==========`, 'info');
+            log(`Totalt: ${allResults.length} tester`, 'info');
+            log(`Bestått: ${passed}`, 'success');
+            log(`Feilet: ${failed}`, failed > 0 ? 'error' : 'success');
+            log(`Tid: ${totalTime}ms`, 'info');
+            
+            document.getElementById('progress-fill').style.width = '100%';
+            document.getElementById('progress-text').textContent = 
+                `Ferdig! ${passed}/${allResults.length} bestått`;
+        }
+        
+        function clearResults() {
+            allResults = [];
+            document.getElementById('results').innerHTML = `
+                <div class="empty-state" id="empty-state">
+                    <div class="icon">🧪</div>
+                    <h2>Klar til testing</h2>
+                    <p>Klikk "Kjør alle tester" for å starte</p>
+                </div>
+            `;
+            document.getElementById('summary').style.display = 'none';
+            document.getElementById('progress-container').style.display = 'none';
+            document.getElementById('filters').style.display = 'none';
+            document.getElementById('log-output').style.display = 'none';
+            document.getElementById('log-content').innerHTML = '';
+        }
+        
+        // Log when page loads
+        log('Test suite lastet og klar', 'success');
+    </script>
+</body>
+</html>
