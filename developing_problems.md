@@ -61,3 +61,18 @@
 ---
 *Sist oppdatert: Februar 2026*
 
+
+
+Fikse legg i handlekurv fra oppskrift. Hvis man da etter å lagt i handlekurv sjekker handlekurven, så er det bare tomme ting i handlelisten uten noen tekst. Bare tomt, men det er f.eks 42 ting i handlelisten, men det står ikke noe på hver av de tingene i handlelisten. 
+
+Hvis man endrer rotasjon på bilde, så må det bli lagret på selve oppskrift siden også, ikke bare midlertidig. 
+
+
+Problemer med prisestimat. 
+
+
+Fortsatt problemer med timer funksjon. Timeren starter der jeg velger tidspunkt, men den timeren som ligger på f.eks hjemskjermen oppdaterer seg ikke. Den står bare på 00.00 hele tiden.
+
+
+Problemer med å legge til utstyr.
+

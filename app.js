@@ -209,7 +209,10 @@ function getIngredientsAsString(ingredients) {
 function getItemName(item) {
     if (!item) return '';
     if (typeof item === 'string') return item;
-    if (typeof item === 'object' && item.name) return String(item.name);
+    if (typeof item === 'object') {
+        if (item.text) return String(item.text);
+        if (item.name) return String(item.name);
+    }
     return String(item);
 }
 
@@ -1720,9 +1723,10 @@ function renderRecipeView() {
     if (recipe.images && recipe.images.length > 0) {
         imagesHtml = `
             <div class="recipe-images-gallery">
-                ${recipe.images.map((img, i) => 
-                    `<img src="${img}" class="gallery-image" data-index="${i}" alt="Oppskriftsbilde ${i + 1}">`
-                ).join('')}
+                ${recipe.images.map((img, i) => {
+                    const rotation = recipe.imageRotations?.[i] || 0;
+                    return `<img src="${img}" class="gallery-image" data-index="${i}" style="transform: rotate(${rotation}deg)" alt="Oppskriftsbilde ${i + 1}">`;
+                }).join('')}
             </div>
         `;
     }
@@ -1831,7 +1835,7 @@ function renderRecipeView() {
     // Add image click handlers for viewer
     container.querySelectorAll('.gallery-image').forEach(img => {
         on(img, 'click', () => {
-            openImageViewer(recipe.images, parseInt(img.dataset.index));
+            openImageViewer(recipe.images, parseInt(img.dataset.index), recipe.imageRotations, recipe.id);
         });
     });
 }
@@ -1928,7 +1932,7 @@ function addScaledToShoppingList() {
     for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed && !state.shoppingList.some(item => getItemName(item).toLowerCase() === trimmed.toLowerCase())) {
-            state.shoppingList.push({ name: trimmed, checked: false, addedAt: new Date() });
+            state.shoppingList.push({ text: trimmed, checked: false, addedAt: new Date() });
             added++;
         }
     }
@@ -3047,10 +3051,14 @@ function setupImageViewer() {
 
 let viewerImages = [];
 let viewerIndex = 0;
+let viewerImageRotations = [];
+let viewerImageRecipeId = null;
 
-function openImageViewer(images, startIndex = 0) {
+function openImageViewer(images, startIndex = 0, rotations = null, recipeId = null) {
     viewerImages = images;
     viewerIndex = startIndex;
+    viewerImageRotations = Array.isArray(rotations) ? rotations : [];
+    viewerImageRecipeId = recipeId || null;
     
     const viewer = $('imageViewer');
     viewer.classList.remove('hidden');
@@ -3069,8 +3077,17 @@ function navigateImage(direction) {
 }
 
 function updateViewerImage() {
-    $('viewerImage').src = viewerImages[viewerIndex];
+    const imageEl = $('viewerImage');
+    if (!imageEl) return;
+    imageEl.src = viewerImages[viewerIndex];
     $('viewerCaption').textContent = `${viewerIndex + 1} / ${viewerImages.length}`;
+
+    const rotation = viewerImageRotations[viewerIndex] || 0;
+    currentImageRotation = rotation;
+    currentImageScale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateImageTransform();
 }
 
 // ===== Modal =====
@@ -3948,7 +3965,9 @@ function generateShoppingListFromPlan() {
     }
     
     // Add new ingredients to existing list (don't replace)
-    const existingTexts = state.shoppingList.map(item => item.text.toLowerCase());
+    const existingTexts = state.shoppingList
+        .map(item => getItemName(item).toLowerCase())
+        .filter(name => name);
     const newItems = [...ingredients]
         .filter(ing => !existingTexts.includes(ing.toLowerCase()))
         .map(ing => ({ text: ing, checked: false, category: categorizeIngredient(ing) }));
@@ -4017,7 +4036,11 @@ function setupShoppingListEvents() {
 function sortShoppingList(sortType) {
     switch (sortType) {
         case 'alpha':
-            state.shoppingList.sort((a, b) => a.text.localeCompare(b.text, 'no'));
+            state.shoppingList.sort((a, b) => {
+                const aText = getItemName(a);
+                const bText = getItemName(b);
+                return aText.localeCompare(bText, 'no');
+            });
             break;
         case 'category':
             state.shoppingList.sort((a, b) => (a.category || 'annet').localeCompare(b.category || 'annet', 'no'));
@@ -4055,7 +4078,7 @@ function renderShoppingList() {
     container.innerHTML = state.shoppingList.map((item, i) => `
         <div class="shopping-item ${item.checked ? 'checked' : ''}">
             <input type="checkbox" ${item.checked ? 'checked' : ''} data-index="${i}">
-            <span class="shopping-item-text">${escapeHtml(item.text)}</span>
+            <span class="shopping-item-text">${escapeHtml(getItemName(item))}</span>
             <button class="shopping-item-delete" data-index="${i}">🗑️</button>
         </div>
     `).join('');
@@ -4176,7 +4199,7 @@ function setupTimerEvents() {
 function renderTimerDisplay() {
     const display = $('timerValue');  // Fixed: was timerDisplay
     const labelEl = $('timerLabel');
-    const floatingDisplay = $('floatingTimerDisplay');
+    const floatingDisplay = $('floatingTimerValue');
     const startBtn = $('startTimerBtn');
     const pauseBtn = $('pauseTimerBtn');
     
@@ -4548,16 +4571,7 @@ function showModal(title, content, buttons = [], options = {}) {
     const overlay = document.createElement('div');
     overlay.className = 'generic-modal-overlay';
     
-    let buttonsHtml = '';
-    if (buttons.length > 0) {
-        buttonsHtml = `<div class="modal-buttons">
-            ${buttons.map(btn => `<button class="btn ${btn.class || 'btn-primary'}" onclick="${btn.onclick}">${btn.text}</button>`).join('')}
-        </div>`;
-    } else {
-        buttonsHtml = `<div class="modal-buttons">
-            <button class="btn btn-primary" onclick="closeGenericModal()">Lukk</button>
-        </div>`;
-    }
+    const buttonsHtml = '<div class="modal-buttons"></div>';
     
     // Apply custom width if provided
     const modalStyle = options.width ? `style="max-width: ${options.width};"` : '';
@@ -4579,6 +4593,30 @@ function showModal(title, content, buttons = [], options = {}) {
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) closeGenericModal();
     });
+
+    const buttonsContainer = overlay.querySelector('.modal-buttons');
+    const buttonList = buttons.length > 0
+        ? buttons
+        : [{ text: 'Lukk', class: 'btn-primary', onClick: closeGenericModal }];
+
+    if (buttonsContainer) {
+        buttonList.forEach(btn => {
+            const button = document.createElement('button');
+            button.className = `btn ${btn.class || 'btn-primary'}`;
+            button.textContent = btn.text;
+
+            const handler = btn.onClick || btn.onclick;
+            if (typeof handler === 'function') {
+                button.addEventListener('click', handler);
+            } else if (typeof handler === 'string') {
+                button.setAttribute('onclick', handler);
+            } else if (!buttons.length) {
+                button.addEventListener('click', closeGenericModal);
+            }
+
+            buttonsContainer.appendChild(button);
+        });
+    }
     
     // Animate in
     requestAnimationFrame(() => overlay.classList.add('active'));
@@ -4612,7 +4650,13 @@ async function loadExtraSettings() {
         
         // Load shopping list
         const shoppingDoc = favSettings.find(s => s.id === 'shoppingList');
-        if (shoppingDoc?.data) state.shoppingList = shoppingDoc.data;
+        if (shoppingDoc?.data) {
+            state.shoppingList = shoppingDoc.data
+                .map(item => {
+                    const text = getItemName(item);
+                    return text ? { ...item, text } : item;
+                });
+        }
         
         updateFavoritesCount();
         updatePlannedMealsCount();
@@ -9215,6 +9259,10 @@ async function calculateRecipeCost(recipe) {
 }
 
 function showRecipeCostEstimate(recipe) {
+    if (!recipe || !recipe.ingredients) {
+        showToast('Ingen ingredienser å beregne pris for', 'warning');
+        return;
+    }
     showToast('Beregner kostnad...', 'info');
     
     calculateRecipeCost(recipe).then(cost => {
@@ -9246,7 +9294,7 @@ function showRecipeCostEstimate(recipe) {
             </div>
         `;
         
-        showModal('💰 Kostnad: ' + recipe.title, html, [
+        showModal('💰 Kostnad: ' + recipe.name, html, [
             { text: 'Lukk', onClick: closeModal }
         ]);
     });
@@ -10324,7 +10372,7 @@ function getDepartmentIcon(dept) {
 
 function shareShoppingList() {
     const text = state.shoppingList.map(item => {
-        const name = item.name || item;
+        const name = getItemName(item);
         return item.amount ? `${name} (${item.amount})` : name;
     }).join('\n');
     
@@ -16392,9 +16440,37 @@ function updateImageTransform() {
 
 function rotateImage(degrees) {
     currentImageRotation = (currentImageRotation + degrees) % 360;
+    if (currentImageRotation < 0) currentImageRotation += 360;
     updateImageTransform();
+    persistCurrentImageRotation();
 }
 window.rotateImage = rotateImage;
+
+async function persistCurrentImageRotation() {
+    if (!viewerImageRecipeId || !state.currentRecipe || state.currentRecipe.id !== viewerImageRecipeId) return;
+
+    const rotations = Array.isArray(state.currentRecipe.imageRotations)
+        ? [...state.currentRecipe.imageRotations]
+        : [];
+
+    while (rotations.length < viewerImages.length) {
+        rotations.push(0);
+    }
+
+    rotations[viewerIndex] = currentImageRotation;
+    state.currentRecipe.imageRotations = rotations;
+
+    const galleryImg = document.querySelector(`.gallery-image[data-index="${viewerIndex}"]`);
+    if (galleryImg) {
+        galleryImg.style.transform = `rotate(${currentImageRotation}deg)`;
+    }
+
+    try {
+        await saveToFirestore('recipes', viewerImageRecipeId, { imageRotations: rotations });
+    } catch (e) {
+        console.warn('Kunne ikke lagre bilde-rotasjon:', e.message);
+    }
+}
 
 function zoomImage(factor) {
     currentImageScale = Math.min(Math.max(currentImageScale * factor, 0.5), 5);
@@ -16413,10 +16489,12 @@ window.resetImageView = resetImageView;
 
 // Override original openImageViewer to reset transform state
 const originalOpenImageViewer = typeof openImageViewer === 'function' ? openImageViewer : null;
-function enhancedOpenImageViewer(images, startIndex = 0) {
+function enhancedOpenImageViewer(images, startIndex = 0, rotations = null, recipeId = null) {
     resetImageView();
     viewerImages = images;
     viewerIndex = startIndex;
+    viewerImageRotations = Array.isArray(rotations) ? rotations : [];
+    viewerImageRecipeId = recipeId || null;
     
     const viewer = $('imageViewer');
     viewer.classList.remove('hidden');
