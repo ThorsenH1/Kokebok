@@ -519,7 +519,11 @@
                 container.appendChild(categoryEl);
             });
             
-            document.getElementById('empty-state').style.display = 'none';
+            // Safely hide empty state if it exists
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
             document.getElementById('filters').style.display = 'flex';
         }
         

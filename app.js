@@ -160,6 +160,9 @@ const state = {
     pantryItems: []
 };
 
+const MAX_RECIPE_IMAGE_BYTES = 900 * 1024;
+const PUSH_PROMPT_KEY = 'kokebok_push_prompted';
+
 // ===== DOM Helpers =====
 const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
@@ -445,6 +448,17 @@ function fileToBase64(file) {
     });
 }
 
+function estimateBase64Bytes(dataUrl) {
+    if (!dataUrl) return 0;
+    const base64 = String(dataUrl).split(',')[1] || '';
+    return Math.floor(base64.length * 0.75);
+}
+
+function getTotalImageBytes(images) {
+    if (!Array.isArray(images)) return 0;
+    return images.reduce((sum, img) => sum + estimateBase64Bytes(img), 0);
+}
+
 async function compressImage(file, maxWidth = 1600, maxHeight = 1600, quality = 0.8) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -505,19 +519,18 @@ async function initApp() {
         updateUserInfo();
         restoreMenuSectionStates();
         
-        // v4.0 - Load social data only if gamification is enabled
-        if (state.settings.gamificationEnabled) {
-            loadSocialData().then(() => {
-                updateFriendNotificationBadge();
-            });
-        }
+        // v4.0 - Load social data for friends/sharing
+        loadSocialData().then(() => {
+            updateFriendNotificationBadge();
+        });
         
         // v4.1 - Check expiring items and request push permission
         setTimeout(() => {
             checkExpiringItems();
             // Auto-request push permission if user hasn't been asked
-            if (state.settings.pushNotifications && isPushSupported()) {
-                requestPushPermission();
+            if (state.settings.pushNotifications && shouldAutoRequestPush()) {
+                localStorage.setItem(PUSH_PROMPT_KEY, 'true');
+                requestPushPermission(true);
             }
         }, 2000);
         
@@ -593,12 +606,17 @@ async function loadAllData() {
             for (const cat of missingCategories) {
                 try {
                     await saveToFirestore('categories', cat.id, cat);
-                    state.categories.push(cat);
                 } catch (e) {
                     console.warn(`  Kunne ikke lagre kategori ${cat.id}:`, e.message);
                 }
             }
         }
+        // Ensure defaults exist locally even if Firestore save fails
+        const categoryMap = new Map(state.categories.map(c => [c.id, c]));
+        DEFAULT_CATEGORIES.forEach(cat => {
+            if (!categoryMap.has(cat.id)) categoryMap.set(cat.id, cat);
+        });
+        state.categories = Array.from(categoryMap.values());
         
         // Load recipes and books
         state.recipes = await loadCollection('recipes');
@@ -1492,10 +1510,10 @@ function renderCategories() {
         count: state.recipes.filter(r => r.category === cat.id).length
     })).filter(cat => cat.count > 0 || DEFAULT_CATEGORIES.some(dc => dc.id === cat.id));
     
-    // Show top 8 categories
-    const topCategories = categoriesWithCounts.slice(0, 8);
+    // Show ALL categories, not just top 8
+    const categoriesToShow = categoriesWithCounts;
     
-    grid.innerHTML = topCategories.map(cat => `
+    grid.innerHTML = categoriesToShow.map(cat => `
         <div class="category-card" data-category="${cat.id}">
             <span class="category-icon">${cat.icon}</span>
             <span class="category-name">${escapeHtml(cat.name)}</span>
@@ -2006,7 +2024,18 @@ async function handleImageUpload(e) {
     for (const file of files) {
         try {
             const compressed = await compressImage(file);
-            state.tempImages.push(compressed);
+            const tentativeImages = [...state.tempImages, compressed];
+            if (getTotalImageBytes(tentativeImages) > MAX_RECIPE_IMAGE_BYTES) {
+                const smaller = await compressImage(file, 1200, 1200, 0.7);
+                const smallerTentative = [...state.tempImages, smaller];
+                if (getTotalImageBytes(smallerTentative) > MAX_RECIPE_IMAGE_BYTES) {
+                    showToast('Bildene er for store til å lagres. Fjern noen eller bruk mindre bilder.', 'error');
+                    continue;
+                }
+                state.tempImages.push(smaller);
+            } else {
+                state.tempImages.push(compressed);
+            }
         } catch (err) {
             console.error('Image compression error:', err);
             showToast('Kunne ikke behandle bilde', 'error');
@@ -2038,6 +2067,11 @@ async function saveRecipe() {
         tags: $('recipeTags').value.split(',').map(t => t.trim()).filter(t => t),
         images: state.tempImages
     };
+
+    if (getTotalImageBytes(recipe.images) > MAX_RECIPE_IMAGE_BYTES) {
+        showToast('Bildene er for store til å lagres. Fjern noen eller bruk mindre bilder.', 'error');
+        return;
+    }
     
     try {
         const id = await saveToFirestore('recipes', state.editingRecipe?.id, recipe);
@@ -2078,6 +2112,9 @@ async function shareRecipe() {
     const text = `${recipe.name}\n\nIngredienser:\n${recipe.ingredients || 'Ikke angitt'}\n\nFremgangsmåte:\n${recipe.instructions || 'Ikke angitt'}`;
     
     // Show share options modal
+    if (!state.friends || state.friends.length === 0) {
+        await loadSocialData();
+    }
     const hasFriends = state.friends && state.friends.length > 0;
     
     let friendsHtml = '';
@@ -3070,39 +3107,137 @@ function showAddMenu() {
 
 // ===== NORWEGIAN TO ENGLISH TRANSLATION FOR SEARCH =====
 const norwegianToEnglish = {
-    // Common Norwegian food terms
-    'kylling': 'chicken', 'biff': 'beef', 'svinekjøtt': 'pork', 'lam': 'lamb',
-    'fisk': 'fish', 'laks': 'salmon', 'torsk': 'cod', 'reker': 'shrimp',
-    'pasta': 'pasta', 'ris': 'rice', 'nudler': 'noodles', 'pizza': 'pizza',
-    'suppe': 'soup', 'salat': 'salad', 'gryte': 'stew', 'pai': 'pie',
-    'kake': 'cake', 'dessert': 'dessert', 'is': 'ice cream', 'pudding': 'pudding',
+    // Common Norwegian food terms - Proteins
+    'kylling': 'chicken', 'kyllingbryst': 'chicken breast', 'kyllinglår': 'chicken thigh',
+    'biff': 'beef', 'oksekjøtt': 'beef', 'oksefilet': 'beef fillet', 'entrecote': 'ribeye',
+    'svinekjøtt': 'pork', 'svin': 'pork', 'svinekoteletter': 'pork chops', 'ribbe': 'pork ribs',
+    'lam': 'lamb', 'lammekoteletter': 'lamb chops', 'lammeskank': 'lamb shank',
+    'fisk': 'fish', 'laks': 'salmon', 'torsk': 'cod', 'sei': 'pollock', 'hyse': 'haddock',
+    'kveite': 'halibut', 'ørret': 'trout', 'makrell': 'mackerel', 'tunfisk': 'tuna',
+    'reker': 'shrimp', 'krabbe': 'crab', 'hummer': 'lobster', 'blåskjell': 'mussels',
+    'kjøttdeig': 'ground beef', 'kjøttkaker': 'meatballs', 'bacon': 'bacon',
+    'pølse': 'sausage', 'skinke': 'ham', 'kalkun': 'turkey', 'and': 'duck',
+    
+    // Pasta and Carbs
+    'pasta': 'pasta', 'spaghetti': 'spaghetti', 'penne': 'penne', 'rigatoni': 'rigatoni',
+    'ris': 'rice', 'langkornet ris': 'long grain rice', 'jasminris': 'jasmine rice',
+    'nudler': 'noodles', 'pizza': 'pizza', 'brød': 'bread', 'focaccia': 'focaccia',
+    'gnocchi': 'gnocchi', 'ravioli': 'ravioli', 'tortellini': 'tortellini',
+    
+    // Soups and Stews
+    'suppe': 'soup', 'gryte': 'stew', 'lapskaus': 'stew', 'gryterett': 'casserole',
+    'fiskesuppe': 'fish soup', 'tomatsuppe': 'tomato soup', 'løksuppe': 'onion soup',
+    
+    // Desserts and Sweets
+    'kake': 'cake', 'sjokoladekake': 'chocolate cake', 'ostekake': 'cheesecake',
+    'dessert': 'dessert', 'is': 'ice cream', 'pudding': 'pudding', 'mousse': 'mousse',
+    'bolle': 'bun', 'kanelbolle': 'cinnamon roll', 'kringle': 'pastry',
+    'kjeks': 'cookie', 'småkaker': 'cookies', 'brownies': 'brownies',
+    'vafler': 'waffles', 'vaffel': 'waffle', 'pannekaker': 'pancakes', 'pannekake': 'pancake',
+    'pai': 'pie', 'eplepai': 'apple pie', 'terte': 'tart', 'crumble': 'crumble',
+    'sukker': 'sugar', 'sjokolade': 'chocolate', 'karamell': 'caramel',
+    
+    // Fruits
     'banan': 'banana', 'eple': 'apple', 'appelsin': 'orange', 'sitron': 'lemon',
+    'lime': 'lime', 'jordbær': 'strawberry', 'bringebær': 'raspberry',
+    'blåbær': 'blueberry', 'multer': 'cloudberry', 'kirsebær': 'cherry',
+    'druer': 'grapes', 'melon': 'melon', 'vannmelon': 'watermelon', 'pære': 'pear',
+    'plomme': 'plum', 'aprikos': 'apricot', 'fersken': 'peach', 'mango': 'mango',
+    'ananas': 'pineapple', 'kiwi': 'kiwi', 'avokado': 'avocado',
+    
+    // Vegetables
     'tomat': 'tomato', 'potet': 'potato', 'gulrot': 'carrot', 'løk': 'onion',
-    'hvitløk': 'garlic', 'sopp': 'mushroom', 'paprika': 'pepper',
-    'ost': 'cheese', 'egg': 'egg', 'smør': 'butter', 'melk': 'milk',
-    'brød': 'bread', 'pannekake': 'pancake', 'vaffel': 'waffle',
+    'hvitløk': 'garlic', 'sopp': 'mushroom', 'paprika': 'pepper', 'chili': 'chili',
+    'brokkoli': 'broccoli', 'blomkål': 'cauliflower', 'spinat': 'spinach',
+    'salat': 'salad', 'isbergsalat': 'iceberg lettuce', 'ruccola': 'arugula',
+    'agurk': 'cucumber', 'squash': 'zucchini', 'aubergine': 'eggplant',
+    'kål': 'cabbage', 'rødkål': 'red cabbage', 'grønnkål': 'kale',
+    'bønner': 'beans', 'erter': 'peas', 'mais': 'corn', 'linser': 'lentils',
+    'purre': 'leek', 'selleri': 'celery', 'fennikel': 'fennel',
+    'rødbete': 'beet', 'kålrot': 'rutabaga', 'nepe': 'turnip',
+    'asparges': 'asparagus', 'artisjokk': 'artichoke', 'reddik': 'radish',
+    
+    // Dairy
+    'ost': 'cheese', 'mozzarella': 'mozzarella', 'parmesan': 'parmesan',
+    'feta': 'feta', 'cheddar': 'cheddar', 'brie': 'brie',
+    'egg': 'egg', 'smør': 'butter', 'melk': 'milk', 'fløte': 'cream',
+    'rømme': 'sour cream', 'yoghurt': 'yogurt', 'kesam': 'quark',
+    
+    // Meals and Dishes
     'frokost': 'breakfast', 'middag': 'dinner', 'lunsj': 'lunch',
-    'vegetar': 'vegetarian', 'vegan': 'vegan', 'sunn': 'healthy',
-    'enkel': 'easy', 'rask': 'quick', 'italiensk': 'italian', 'meksikansk': 'mexican',
-    'indisk': 'indian', 'thai': 'thai', 'kinesisk': 'chinese', 'japansk': 'japanese',
+    'forrett': 'appetizer', 'hovedrett': 'main course', 'tilbehør': 'side dish',
+    'aperitiff': 'appetizer', 'snacks': 'snacks',
+    
+    // Diets
+    'vegetar': 'vegetarian', 'vegan': 'vegan', 'glutenfri': 'gluten free',
+    'sunn': 'healthy', 'lavkarbo': 'low carb', 'keto': 'keto',
+    
+    // Cooking styles
+    'enkel': 'easy', 'rask': 'quick', 'tradisjonell': 'traditional',
+    'festmat': 'party food', 'hverdagsmat': 'everyday food',
+    
+    // Cuisines
+    'italiensk': 'italian', 'meksikansk': 'mexican', 'indisk': 'indian',
+    'thai': 'thai', 'kinesisk': 'chinese', 'japansk': 'japanese',
+    'gresk': 'greek', 'spansk': 'spanish', 'fransk': 'french',
+    'norsk': 'norwegian', 'skandinavisk': 'scandinavian', 'amerikanisirk': 'american',
+    'asiatisk': 'asian', 'middelhavet': 'mediterranean', 'marokkansk': 'moroccan',
+    
+    // Specific dishes
     'burger': 'burger', 'taco': 'taco', 'wrap': 'wrap', 'sandwich': 'sandwich',
     'lasagne': 'lasagne', 'carbonara': 'carbonara', 'bolognese': 'bolognese',
-    'curry': 'curry', 'wok': 'stir fry', 'grillet': 'grilled', 'stekt': 'fried',
-    'bakt': 'baked', 'kokt': 'boiled'
+    'curry': 'curry', 'wok': 'stir fry', 'risotto': 'risotto', 'paella': 'paella',
+    'sushi': 'sushi', 'ramen': 'ramen', 'pho': 'pho', 'fajitas': 'fajitas',
+    'enchiladas': 'enchiladas', 'quesadilla': 'quesadilla', 'nachos': 'nachos',
+    'tikka masala': 'tikka masala', 'butter chicken': 'butter chicken',
+    'pad thai': 'pad thai', 'sweet and sour': 'sweet and sour',
+    'teriyaki': 'teriyaki', 'satay': 'satay',
+    
+    // Cooking methods
+    'grillet': 'grilled', 'stekt': 'fried', 'bakt': 'baked', 'kokt': 'boiled',
+    'ovnsbakt': 'roasted', 'dampet': 'steamed', 'wokket': 'stir fried',
+    'marinert': 'marinated', 'røkt': 'smoked', 'syltet': 'pickled',
+    
+    // Norwegian Traditional
+    'fårikål': 'lamb stew', 'kjøttkaker': 'meatballs', 'fiskekaker': 'fish cakes',
+    'fiskeboller': 'fish balls', 'pinnekjøtt': 'dried lamb ribs', 'lutefisk': 'lutefisk',
+    'raspeballer': 'potato dumplings', 'komle': 'potato dumplings', 'klubb': 'potato dumplings',
+    'rømmegrøt': 'sour cream porridge', 'risengryn': 'rice pudding', 'risgrøt': 'rice porridge',
+    'lefse': 'lefse', 'lompe': 'potato flatbread', 'flatbrød': 'flatbread',
+    'krumkake': 'waffle cookie', 'fattigmann': 'traditional cookie', 'berlinerbolle': 'donut',
+    'skillingsbolle': 'cinnamon bun', 'skolebolle': 'custard bun'
 };
 
 function translateToEnglish(query) {
-    let translated = query.toLowerCase();
+    let translated = query.toLowerCase().trim();
     
     // Check for direct translation
     if (norwegianToEnglish[translated]) {
         return norwegianToEnglish[translated];
     }
     
-    // Check for partial matches
+    // Check for partial matches - replace all matching words
+    let words = translated.split(/\s+/);
+    let translatedWords = words.map(word => {
+        // Try exact match first
+        if (norwegianToEnglish[word]) {
+            return norwegianToEnglish[word];
+        }
+        // Try partial match
+        for (const [no, en] of Object.entries(norwegianToEnglish)) {
+            if (word.includes(no) && word.length - no.length < 3) {
+                return en;
+            }
+        }
+        return word;
+    });
+    
+    translated = translatedWords.join(' ');
+    
+    // Also do a full-text partial match replacement for compound words
     for (const [no, en] of Object.entries(norwegianToEnglish)) {
-        if (translated.includes(no)) {
-            translated = translated.replace(no, en);
+        if (translated.includes(no) && translated !== en) {
+            translated = translated.replace(new RegExp(no, 'g'), en);
         }
     }
     
@@ -3987,15 +4122,33 @@ function closeTimer() {
 function setupTimerEvents() {
     const closeBtn = $('closeTimerBtn');
     const overlay = document.querySelector('#timerModal .feature-modal-overlay');
-    const startBtn = $('timerStartBtn');
-    const pauseBtn = $('timerPauseBtn');
-    const resetBtn = $('timerResetBtn');
+    const startBtn = $('startTimerBtn');  // Fixed: was timerStartBtn
+    const pauseBtn = $('pauseTimerBtn');  // Fixed: was timerPauseBtn
+    const resetBtn = $('resetTimerBtn');  // Fixed: was timerResetBtn
+    const setCustomBtn = $('setCustomTimerBtn');
     
     if (closeBtn) closeBtn.onclick = closeTimer;
     if (overlay) overlay.onclick = closeTimer;
     if (startBtn) startBtn.onclick = startTimer;
     if (pauseBtn) pauseBtn.onclick = pauseTimer;
     if (resetBtn) resetBtn.onclick = resetTimer;
+    
+    // Custom timer button
+    if (setCustomBtn) {
+        setCustomBtn.onclick = () => {
+            const customMinutes = $('customMinutes');
+            const minutes = parseInt(customMinutes?.value) || 0;
+            if (minutes > 0) {
+                timerSeconds = minutes * 60;
+                timerLabel = `${minutes} min`;
+                $$('.timer-preset').forEach(p => p.classList.remove('active'));
+                renderTimerDisplay();
+                showToast(`Timer satt til ${minutes} minutter`, 'success');
+            } else {
+                showToast('Skriv inn antall minutter', 'warning');
+            }
+        };
+    }
     
     // Presets
     $$('.timer-preset').forEach(preset => {
@@ -4009,22 +4162,23 @@ function setupTimerEvents() {
         };
     });
     
-    // Custom input
+    // Custom input - also set timer when user presses Enter
     const customMinutes = $('customMinutes');
     if (customMinutes) {
-        customMinutes.onchange = () => {
-            const minutes = parseInt(customMinutes.value) || 0;
-            timerSeconds = minutes * 60;
-            timerLabel = `${minutes} min`;
-            $$('.timer-preset').forEach(p => p.classList.remove('active'));
-            renderTimerDisplay();
+        customMinutes.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                setCustomBtn?.click();
+            }
         };
     }
 }
 
 function renderTimerDisplay() {
-    const display = $('timerDisplay');
+    const display = $('timerValue');  // Fixed: was timerDisplay
+    const labelEl = $('timerLabel');
     const floatingDisplay = $('floatingTimerDisplay');
+    const startBtn = $('startTimerBtn');
+    const pauseBtn = $('pauseTimerBtn');
     
     const minutes = Math.floor(timerSeconds / 60);
     const seconds = timerSeconds % 60;
@@ -4034,6 +4188,30 @@ function renderTimerDisplay() {
         display.textContent = timeStr;
         display.classList.toggle('running', timerRunning);
         display.classList.toggle('finished', timerSeconds === 0 && !timerRunning && timerLabel);
+    }
+    
+    // Update label
+    if (labelEl) {
+        if (timerRunning) {
+            labelEl.textContent = timerLabel || 'Kjører...';
+        } else if (timerSeconds === 0 && timerLabel) {
+            labelEl.textContent = 'Ferdig!';
+        } else if (timerSeconds > 0) {
+            labelEl.textContent = timerLabel || 'Klar';
+        } else {
+            labelEl.textContent = 'Klar';
+        }
+    }
+    
+    // Toggle start/pause buttons visibility
+    if (startBtn && pauseBtn) {
+        if (timerRunning) {
+            startBtn.classList.add('hidden');
+            pauseBtn.classList.remove('hidden');
+        } else {
+            startBtn.classList.remove('hidden');
+            pauseBtn.classList.add('hidden');
+        }
     }
     
     if (floatingDisplay) {
@@ -5341,8 +5519,24 @@ async function loadSocialData() {
     
     try {
         // Load friends
-        const friendsSnap = await db.collection('users').doc(state.user.uid).collection('friends').get();
-        state.friends = friendsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let friendsLoaded = false;
+        try {
+            console.log('🔄 Laster venneliste fra Firestore subcollection...');
+            const friendsSnap = await db.collection('users').doc(state.user.uid).collection('friends').get();
+            console.log(`📊 Friends subcollection: ${friendsSnap.size} dokumenter`);
+            state.friends = friendsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            friendsLoaded = true;
+        } catch (e) {
+            console.warn('Kunne ikke lese venneliste:', e.message);
+            state.friends = [];
+        }
+        if (!friendsLoaded || state.friends.length === 0) {
+            console.log('⚠️ Ingen venner i subcollection, prøver fallback...');
+            await loadFriendsFromAcceptedRequests();
+        }
+        
+        console.log(`✓ Endelig venneliste: ${state.friends.length} venner`);
+        state.friends.forEach(f => console.log(`   - ${f.displayName || f.email} (${f.friendUid})`));
         
         // Load incoming friend requests
         const requestsSnap = await db.collection('friendRequests')
@@ -5389,6 +5583,117 @@ async function loadSocialData() {
     }
 }
 
+async function loadFriendsFromAcceptedRequests() {
+    try {
+        console.log('🔍 loadFriendsFromAcceptedRequests: Søker etter aksepterte forespørsler...');
+        const [fromSnap, toSnap] = await Promise.all([
+            db.collection('friendRequests')
+                .where('fromUid', '==', state.user.uid)
+                .get(),
+            db.collection('friendRequests')
+                .where('toUid', '==', state.user.uid)
+                .get()
+        ]);
+
+        const requestDocs = [...fromSnap.docs, ...toSnap.docs];
+        console.log(`📋 Fant ${requestDocs.length} totale forespørsler (sendt: ${fromSnap.size}, mottatt: ${toSnap.size})`);
+        
+        if (requestDocs.length === 0) {
+            console.log('❌ Ingen forespørsler funnet i databasen');
+            return;
+        }
+
+        const friendUids = new Set();
+        const requestMap = new Map();
+        requestDocs.forEach(doc => {
+            const data = doc.data();
+            const statusRaw = data.status;
+            const status = typeof statusRaw === 'string' ? statusRaw.toLowerCase() : statusRaw;
+            const isAccepted =
+                status === 'accepted' ||
+                status === 'approved' ||
+                status === 'ok' ||
+                status === 'confirmed' ||
+                status === true ||
+                !!data.acceptedAt ||
+                !!data.approvedAt ||
+                !!data.confirmedAt;
+            
+            // Debug: Log each request
+            console.log(`📝 Forespørsel: ${data.fromEmail} → ${data.toEmail}, status: "${statusRaw}", acceptedAt: ${data.acceptedAt ? 'JA' : 'nei'}, isAccepted: ${isAccepted}`);
+            
+            if (!isAccepted) {
+                console.log(`   ↳ Hopper over (ikke akseptert)`);
+                return;
+            }
+            const otherUid = data.fromUid === state.user.uid ? data.toUid : data.fromUid;
+            if (otherUid) {
+                friendUids.add(otherUid);
+                requestMap.set(otherUid, data);
+                console.log(`   ✓ Legger til som venn: ${otherUid}`);
+            }
+        });
+
+        console.log(`🔢 Aksepterte forespørsler funnet: ${friendUids.size} venner å legge til`);
+        
+        if (friendUids.size === 0) {
+            console.log('❌ Ingen aksepterte forespørsler - ingen venner å legge til');
+            return;
+        }
+
+        const fallbackFriends = [];
+        const batch = db.batch();
+        for (const uid of friendUids) {
+            const request = requestMap.get(uid) || {};
+            let profile = null;
+            try {
+                const doc = await db.collection('publicProfiles').doc(uid).get();
+                if (doc.exists) profile = doc.data();
+            } catch (e) {
+                // Ignore profile fetch errors
+            }
+
+            const friendData = {
+                friendUid: uid,
+                email: profile?.email || request.fromEmail || request.toEmail || null,
+                displayName: profile?.displayName || request.fromName || 'Kokk',
+                photoURL: profile?.photoURL || request.fromPhoto || null,
+                addedAt: request.acceptedAt || request.createdAt || firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const friendRef = db.collection('users').doc(state.user.uid).collection('friends').doc(uid);
+            batch.set(friendRef, friendData, { merge: true });
+            console.log(`📝 Forbereder batch write for venn: ${friendData.displayName} (${uid})`);
+
+            fallbackFriends.push({
+                id: uid,
+                friendUid: uid,
+                email: friendData.email,
+                displayName: friendData.displayName,
+                photoURL: friendData.photoURL,
+                level: profile?.level || 1,
+                recipeCount: profile?.recipeCount || 0,
+                addedAt: friendData.addedAt
+            });
+        }
+
+        try {
+            console.log('💾 Forsøker å lagre venner til Firestore...');
+            await batch.commit();
+            console.log('✅ Venner lagret til Firestore!');
+        } catch (e) {
+            console.error('❌ FEIL ved lagring av venner til Firestore:', e.message, e);
+        }
+
+        if (fallbackFriends.length > 0) {
+            console.log(`✓ Setter ${fallbackFriends.length} venner i lokal state`);
+            state.friends = fallbackFriends;
+        }
+    } catch (e) {
+        console.warn('Fallback for venner feilet:', e.message);
+    }
+}
+
 // Real-time listeners for social updates
 let socialListenersSetup = false;
 function setupSocialListeners() {
@@ -5396,17 +5701,37 @@ function setupSocialListeners() {
     socialListenersSetup = true;
     
     console.log('🔄 Setter opp sanntidslyttere for sosiale data...');
+    let friendsInitialSnapshot = true;
+    let requestsInitialSnapshot = true;
+    let sentInitialSnapshot = true;
+    let sharedRecipesInitialSnapshot = true;
+    let sharedCookbooksInitialSnapshot = true;
+    let rebuildingFriends = false;
     
     // CRITICAL: Listen for changes to MY friends list (real-time sync when friend accepts)
     db.collection('users').doc(state.user.uid).collection('friends')
         .onSnapshot(snapshot => {
+            const isInitial = friendsInitialSnapshot;
+            friendsInitialSnapshot = false;
             const oldCount = state.friends.length;
-            state.friends = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const snapshotFriends = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            if (snapshotFriends.length === 0 && state.friends.length > 0) {
+                if (!rebuildingFriends) {
+                    rebuildingFriends = true;
+                    loadFriendsFromAcceptedRequests().finally(() => {
+                        rebuildingFriends = false;
+                        updateSocialCard();
+                    });
+                }
+            } else {
+                state.friends = snapshotFriends;
+            }
             
             // Notify if a new friend was added (by someone accepting our request)
+            // Only notify if initial load is complete AND this is actually a new friend
             const changes = snapshot.docChanges();
             const newFriends = changes.filter(c => c.type === 'added');
-            if (newFriends.length > 0 && oldCount > 0) {
+            if (!isInitial && newFriends.length > 0 && oldCount > 0) {
                 const newFriend = newFriends[0].doc.data();
                 showToast(`🎉 ${newFriend.displayName || newFriend.email} er nå din venn!`, 'success');
                 triggerConfetti();
@@ -5426,11 +5751,13 @@ function setupSocialListeners() {
         .where('toUid', '==', state.user.uid)
         .where('status', '==', 'pending')
         .onSnapshot(snapshot => {
+            const isInitial = requestsInitialSnapshot;
+            requestsInitialSnapshot = false;
             const changes = snapshot.docChanges();
             const newRequests = changes.filter(c => c.type === 'added');
             
-            if (newRequests.length > 0 && state.friendRequests.length > 0) {
-                // This is a new request (not initial load)
+            // Only notify if initial load is complete
+            if (!isInitial && newRequests.length > 0) {
                 showToast('📬 Ny venneforespørsel!', 'info');
             }
             
@@ -5448,6 +5775,9 @@ function setupSocialListeners() {
     db.collection('friendRequests')
         .where('fromUid', '==', state.user.uid)
         .onSnapshot(snapshot => {
+            if (sentInitialSnapshot) {
+                sentInitialSnapshot = false;
+            }
             state.sentRequests = snapshot.docs
                 .filter(doc => doc.data().status === 'pending')
                 .map(doc => ({ id: doc.id, ...doc.data() }));
@@ -5464,10 +5794,13 @@ function setupSocialListeners() {
         .where('toUid', '==', state.user.uid)
         .limit(50)
         .onSnapshot(snapshot => {
+            const isInitial = sharedRecipesInitialSnapshot;
+            sharedRecipesInitialSnapshot = false;
             const changes = snapshot.docChanges();
             const newShares = changes.filter(c => c.type === 'added');
             
-            if (newShares.length > 0 && state.sharedRecipes.length > 0) {
+            // Only notify if initial load is complete
+            if (!isInitial && newShares.length > 0) {
                 const share = newShares[0].doc.data();
                 showToast(`🎁 ${share.fromName} delte en oppskrift med deg!`, 'success');
             }
@@ -5484,10 +5817,13 @@ function setupSocialListeners() {
     db.collection('sharedCookbooks')
         .where('toUid', '==', state.user.uid)
         .onSnapshot(snapshot => {
+            const isInitial = sharedCookbooksInitialSnapshot;
+            sharedCookbooksInitialSnapshot = false;
             const changes = snapshot.docChanges();
             const newShares = changes.filter(c => c.type === 'added');
             
-            if (newShares.length > 0 && state.sharedCookbooks.length > 0) {
+            // Only notify if initial load is complete
+            if (!isInitial && newShares.length > 0) {
                 const share = newShares[0].doc.data();
                 showToast(`📚 ${share.fromName} delte kokeboken "${share.cookbookName}" med deg!`, 'success');
                 notifySharedCookbook(share.fromName, share.cookbookName);
@@ -6618,21 +6954,36 @@ function isPushSupported() {
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+function shouldAutoRequestPush() {
+    if (!isPushSupported()) return false;
+    return Notification.permission === 'default' && localStorage.getItem(PUSH_PROMPT_KEY) !== 'true';
+}
+
 // Request push notification permission
-async function requestPushPermission() {
+async function requestPushPermission(silent = false) {
     if (!isPushSupported()) {
-        showToast('Push-varsler støttes ikke på denne enheten', 'warning');
+        if (!silent) {
+            showToast('Push-varsler støttes ikke på denne enheten', 'warning');
+        }
         return false;
+    }
+
+    if (Notification.permission !== 'default') {
+        return Notification.permission === 'granted';
     }
     
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            showToast('Push-varsler aktivert! 🔔', 'success');
+            if (!silent) {
+                showToast('Push-varsler aktivert! 🔔', 'success');
+            }
             await subscribeToPush();
             return true;
         } else {
-            showToast('Du må tillate varsler for å motta dem', 'info');
+            if (!silent) {
+                showToast('Du må tillate varsler for å motta dem', 'info');
+            }
             return false;
         }
     } catch (e) {
@@ -15644,6 +15995,442 @@ function addRecentToPantry(name) {
     showToast(`✅ ${name} lagt til`, 'success');
 }
 window.addRecentToPantry = addRecentToPantry;
+
+// ===== WEEKLY BACKUP SYSTEM =====
+const BACKUP_INTERVAL_DAYS = 7;
+const BACKUP_KEY = 'kokebok_last_backup';
+const MAX_LOCAL_BACKUPS = 4; // Keep last 4 backups (1 month)
+
+async function checkAndPerformWeeklyBackup() {
+    if (!state.user) return;
+    
+    const lastBackup = localStorage.getItem(BACKUP_KEY);
+    const now = Date.now();
+    const weekInMs = BACKUP_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
+    
+    if (!lastBackup || (now - parseInt(lastBackup)) > weekInMs) {
+        console.log('📦 Ukentlig backup påkrevd...');
+        await performAutomaticBackup();
+    }
+}
+
+async function performAutomaticBackup() {
+    try {
+        const backupData = {
+            version: APP_VERSION,
+            backupDate: new Date().toISOString(),
+            userId: state.user.uid,
+            categories: state.categories,
+            recipes: state.recipes.map(r => ({
+                ...r,
+                // Convert Firestore timestamps to ISO strings
+                createdAt: r.createdAt?.toDate?.()?.toISOString() || r.createdAt,
+                updatedAt: r.updatedAt?.toDate?.()?.toISOString() || r.updatedAt
+            })),
+            books: state.books.map(b => ({
+                ...b,
+                createdAt: b.createdAt?.toDate?.()?.toISOString() || b.createdAt,
+                updatedAt: b.updatedAt?.toDate?.()?.toISOString() || b.updatedAt
+            })),
+            settings: state.settings,
+            favorites: state.favorites,
+            mealPlan: state.mealPlan,
+            equipment: state.equipment || [],
+            pantryItems: state.pantryItems || []
+        };
+        
+        // Store backup locally with IndexedDB for persistence
+        await saveBackupToIndexedDB(backupData);
+        
+        // Also store in localStorage as fallback (smaller version)
+        saveBackupToLocalStorage(backupData);
+        
+        // Update last backup time
+        localStorage.setItem(BACKUP_KEY, Date.now().toString());
+        
+        console.log('✅ Ukentlig backup fullført!');
+        console.log(`   📊 ${state.recipes.length} oppskrifter, ${state.books.length} bøker sikret`);
+        
+        // Show subtle notification
+        if (Notification.permission === 'granted') {
+            new Notification('🔒 Backup fullført', {
+                body: `${state.recipes.length} oppskrifter sikret automatisk`,
+                icon: './icons/icon-192.svg',
+                tag: 'backup-notification'
+            });
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Backup feilet:', error);
+        return false;
+    }
+}
+
+// IndexedDB backup storage for larger data
+async function saveBackupToIndexedDB(backupData) {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('KokebokBackups', 1);
+        
+        request.onerror = () => reject(request.error);
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('backups')) {
+                const store = db.createObjectStore('backups', { keyPath: 'id', autoIncrement: true });
+                store.createIndex('backupDate', 'backupDate', { unique: false });
+            }
+        };
+        
+        request.onsuccess = (event) => {
+            const db = event.target.result;
+            const transaction = db.transaction(['backups'], 'readwrite');
+            const store = transaction.objectStore('backups');
+            
+            // Add new backup
+            const addRequest = store.add(backupData);
+            
+            addRequest.onsuccess = () => {
+                // Clean up old backups (keep only last MAX_LOCAL_BACKUPS)
+                const countRequest = store.count();
+                countRequest.onsuccess = () => {
+                    const count = countRequest.result;
+                    if (count > MAX_LOCAL_BACKUPS) {
+                        const deleteCount = count - MAX_LOCAL_BACKUPS;
+                        const cursorRequest = store.openCursor();
+                        let deleted = 0;
+                        cursorRequest.onsuccess = (e) => {
+                            const cursor = e.target.result;
+                            if (cursor && deleted < deleteCount) {
+                                store.delete(cursor.primaryKey);
+                                deleted++;
+                                cursor.continue();
+                            }
+                        };
+                    }
+                };
+                resolve();
+            };
+            
+            addRequest.onerror = () => reject(addRequest.error);
+        };
+    });
+}
+
+// Fallback: localStorage backup (compressed, limited data)
+function saveBackupToLocalStorage(backupData) {
+    try {
+        // Get existing backups
+        const backups = JSON.parse(localStorage.getItem('kokebok_backups') || '[]');
+        
+        // Create a smaller version without images for localStorage
+        const smallBackup = {
+            ...backupData,
+            recipes: backupData.recipes.map(r => ({
+                ...r,
+                images: r.images ? [`[${r.images.length} bilder]`] : [] // Don't store actual image data
+            }))
+        };
+        
+        // Add new backup
+        backups.push(smallBackup);
+        
+        // Keep only last MAX_LOCAL_BACKUPS
+        while (backups.length > MAX_LOCAL_BACKUPS) {
+            backups.shift();
+        }
+        
+        localStorage.setItem('kokebok_backups', JSON.stringify(backups));
+    } catch (e) {
+        console.warn('LocalStorage backup feilet (muligens for store data):', e);
+    }
+}
+
+// Restore from backup
+async function showRestoreBackupOptions() {
+    const backups = await getAllBackups();
+    
+    if (backups.length === 0) {
+        showToast('Ingen backups funnet', 'warning');
+        return;
+    }
+    
+    const html = `
+        <div class="backup-list">
+            <p>Velg en backup å gjenopprette fra:</p>
+            ${backups.map((backup, i) => `
+                <div class="backup-item">
+                    <div class="backup-info">
+                        <strong>${new Date(backup.backupDate).toLocaleDateString('no-NO')}</strong>
+                        <span>${backup.recipes?.length || 0} oppskrifter, ${backup.books?.length || 0} bøker</span>
+                    </div>
+                    <button class="btn btn-small" onclick="restoreFromBackup(${i})">Gjenopprett</button>
+                </div>
+            `).join('')}
+            <p class="backup-warning">⚠️ Gjenoppretting vil erstatte alle nåværende data!</p>
+        </div>
+    `;
+    
+    showModal('🔄 Gjenopprett fra backup', html, []);
+}
+window.showRestoreBackupOptions = showRestoreBackupOptions;
+
+async function getAllBackups() {
+    const backups = [];
+    
+    // Get from IndexedDB
+    try {
+        const idbBackups = await getBackupsFromIndexedDB();
+        backups.push(...idbBackups);
+    } catch (e) {
+        console.warn('Kunne ikke hente IndexedDB backups:', e);
+    }
+    
+    // Get from localStorage as fallback
+    try {
+        const lsBackups = JSON.parse(localStorage.getItem('kokebok_backups') || '[]');
+        // Add only if not duplicate (based on date)
+        for (const b of lsBackups) {
+            if (!backups.some(existing => existing.backupDate === b.backupDate)) {
+                backups.push(b);
+            }
+        }
+    } catch (e) {
+        console.warn('Kunne ikke hente localStorage backups:', e);
+    }
+    
+    // Sort by date, newest first
+    backups.sort((a, b) => new Date(b.backupDate) - new Date(a.backupDate));
+    
+    return backups;
+}
+
+async function getBackupsFromIndexedDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('KokebokBackups', 1);
+        request.onerror = () => resolve([]);
+        request.onsuccess = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('backups')) {
+                resolve([]);
+                return;
+            }
+            const transaction = db.transaction(['backups'], 'readonly');
+            const store = transaction.objectStore('backups');
+            const getAllRequest = store.getAll();
+            getAllRequest.onsuccess = () => resolve(getAllRequest.result || []);
+            getAllRequest.onerror = () => resolve([]);
+        };
+    });
+}
+
+async function restoreFromBackup(backupIndex) {
+    const backups = await getAllBackups();
+    const backup = backups[backupIndex];
+    
+    if (!backup) {
+        showToast('Backup ikke funnet', 'error');
+        return;
+    }
+    
+    if (!confirm('Er du sikker på at du vil gjenopprette? Alle nåværende data vil bli erstattet.')) {
+        return;
+    }
+    
+    try {
+        // Restore to Firestore
+        for (const recipe of backup.recipes || []) {
+            await saveToFirestore('recipes', recipe.id, recipe);
+        }
+        
+        for (const book of backup.books || []) {
+            await saveToFirestore('books', book.id, book);
+        }
+        
+        for (const cat of backup.categories || []) {
+            await saveToFirestore('categories', cat.id, cat);
+        }
+        
+        // Update local state
+        state.recipes = backup.recipes || [];
+        state.books = backup.books || [];
+        state.categories = backup.categories || [];
+        state.settings = backup.settings || state.settings;
+        
+        closeGenericModal();
+        showToast('🔄 Data gjenopprettet!', 'success');
+        renderDashboard();
+        
+    } catch (error) {
+        console.error('Gjenoppretting feilet:', error);
+        showToast('Kunne ikke gjenopprette data', 'error');
+    }
+}
+window.restoreFromBackup = restoreFromBackup;
+
+// Manual backup trigger
+async function createManualBackup() {
+    showToast('Oppretter backup...', 'info');
+    const success = await performAutomaticBackup();
+    if (success) {
+        showToast('✅ Backup opprettet!', 'success');
+    } else {
+        showToast('❌ Backup feilet', 'error');
+    }
+}
+window.createManualBackup = createManualBackup;
+
+// Check for backup on app load
+setTimeout(() => {
+    if (state.user) {
+        checkAndPerformWeeklyBackup();
+    }
+}, 5000);
+
+// ===== IMAGE VIEWER ENHANCEMENTS =====
+let currentImageRotation = 0;
+let currentImageScale = 1;
+let isDragging = false;
+let startX, startY, translateX = 0, translateY = 0;
+
+function setupEnhancedImageViewer() {
+    const viewer = $('imageViewer');
+    const img = $('viewerImage');
+    if (!viewer || !img) return;
+    
+    // Pinch to zoom support for touch devices
+    let initialDistance = 0;
+    let initialScale = 1;
+    
+    img.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            initialDistance = getDistance(e.touches);
+            initialScale = currentImageScale;
+        } else if (e.touches.length === 1) {
+            isDragging = true;
+            startX = e.touches[0].clientX - translateX;
+            startY = e.touches[0].clientY - translateY;
+        }
+    });
+    
+    img.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const distance = getDistance(e.touches);
+            const scale = (distance / initialDistance) * initialScale;
+            currentImageScale = Math.min(Math.max(scale, 0.5), 5);
+            updateImageTransform();
+        } else if (e.touches.length === 1 && isDragging && currentImageScale > 1) {
+            e.preventDefault();
+            translateX = e.touches[0].clientX - startX;
+            translateY = e.touches[0].clientY - startY;
+            updateImageTransform();
+        }
+    });
+    
+    img.addEventListener('touchend', () => {
+        isDragging = false;
+    });
+    
+    // Mouse wheel zoom for desktop
+    img.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.2 : 0.2;
+        currentImageScale = Math.min(Math.max(currentImageScale + delta, 0.5), 5);
+        updateImageTransform();
+    });
+    
+    // Double-tap/click to reset
+    img.addEventListener('dblclick', resetImageView);
+    
+    let lastTap = 0;
+    img.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTap < 300 && e.touches.length === 0) {
+            resetImageView();
+        }
+        lastTap = now;
+    });
+    
+    // Mouse drag for desktop
+    img.addEventListener('mousedown', (e) => {
+        if (currentImageScale > 1) {
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            img.style.cursor = 'grabbing';
+        }
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isDragging && currentImageScale > 1) {
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateImageTransform();
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+        if (img) img.style.cursor = currentImageScale > 1 ? 'grab' : 'zoom-in';
+    });
+}
+
+function getDistance(touches) {
+    return Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY
+    );
+}
+
+function updateImageTransform() {
+    const img = $('viewerImage');
+    if (!img) return;
+    img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentImageScale}) rotate(${currentImageRotation}deg)`;
+    img.style.cursor = currentImageScale > 1 ? 'grab' : 'zoom-in';
+}
+
+function rotateImage(degrees) {
+    currentImageRotation = (currentImageRotation + degrees) % 360;
+    updateImageTransform();
+}
+window.rotateImage = rotateImage;
+
+function zoomImage(factor) {
+    currentImageScale = Math.min(Math.max(currentImageScale * factor, 0.5), 5);
+    updateImageTransform();
+}
+window.zoomImage = zoomImage;
+
+function resetImageView() {
+    currentImageRotation = 0;
+    currentImageScale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateImageTransform();
+}
+window.resetImageView = resetImageView;
+
+// Override original openImageViewer to reset transform state
+const originalOpenImageViewer = typeof openImageViewer === 'function' ? openImageViewer : null;
+function enhancedOpenImageViewer(images, startIndex = 0) {
+    resetImageView();
+    viewerImages = images;
+    viewerIndex = startIndex;
+    
+    const viewer = $('imageViewer');
+    viewer.classList.remove('hidden');
+    updateViewerImage();
+}
+// Redefine if exists
+if (originalOpenImageViewer) {
+    window.openImageViewer = enhancedOpenImageViewer;
+}
+
+// Initialize enhanced image viewer when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    setupEnhancedImageViewer();
+});
 
 // Show login troubleshooting after failed attempts
 let loginAttempts = 0;

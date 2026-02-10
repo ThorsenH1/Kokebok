@@ -751,7 +751,7 @@
                     </div>
 
                     <div class="settings-section">
-                        <h3>💾 Data</h3>
+                        <h3>💾 Data & Backup</h3>
                         <button id="exportDataBtn" class="settings-btn">
                             <span>📥</span> Eksporter alt
                         </button>
@@ -759,6 +759,14 @@
                             <span>📤</span> Importer data
                         </button>
                         <input type="file" id="importInput" accept=".json" hidden>
+                        <hr style="margin: 12px 0; border-color: var(--border);">
+                        <p class="settings-hint" style="margin-bottom: 8px;">🔄 Automatisk backup hver uke</p>
+                        <button class="settings-btn" onclick="createManualBackup()">
+                            <span>💾</span> Lag backup nå
+                        </button>
+                        <button class="settings-btn" onclick="showRestoreBackupOptions()">
+                            <span>🔄</span> Gjenopprett fra backup
+                        </button>
                     </div>
 
                     <div class="settings-section">
@@ -1100,6 +1108,14 @@
             <img id="viewerImage" src="" alt="Forstørret bilde">
             <button class="image-viewer-next">▶</button>
             <div class="image-viewer-caption" id="viewerCaption"></div>
+            <!-- Image Controls -->
+            <div class="image-viewer-controls">
+                <button class="image-control-btn" onclick="rotateImage(-90)" title="Roter mot venstre">↶</button>
+                <button class="image-control-btn" onclick="zoomImage(0.8)" title="Zoom ut">−</button>
+                <button class="image-control-btn" onclick="resetImageView()" title="Tilbakestill">⟲</button>
+                <button class="image-control-btn" onclick="zoomImage(1.25)" title="Zoom inn">+</button>
+                <button class="image-control-btn" onclick="rotateImage(90)" title="Roter mot høyre">↷</button>
+            </div>
         </div>
     </div>
 
