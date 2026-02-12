@@ -895,21 +895,38 @@ async function testOpenAIConnection() {
         return;
     }
     
-    showToast('🔄 Tester tilkobling...');
+    showToast('🔄 Tester GPT-tilkobling...');
     
     try {
-        const response = await fetch('https://api.openai.com/v1/models', {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'Authorization': `Bearer ${key}`
-            }
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: 'Svar kun med ordet: OK' },
+                    { role: 'user', content: 'OK?' }
+                ],
+                max_tokens: 5,
+                temperature: 0
+            })
         });
-        
+
+        const data = await response.json().catch(() => ({}));
+
         if (response.ok) {
-            showToast('✅ AI-tilkobling fungerer!');
+            const answer = data?.choices?.[0]?.message?.content?.trim() || 'OK';
+            showToast(`✅ GPT aktivert! Svar: ${answer}`);
         } else if (response.status === 401) {
-            showToast('❌ Ugyldig API-nøkkel');
+            showToast('❌ Ugyldig OpenAI API-nøkkel');
+        } else if (response.status === 429) {
+            showToast('⚠️ Rate limit/kvote nådd for OpenAI', 'warning');
         } else {
-            showToast('⚠️ Kunne ikke verifisere nøkkel');
+            const msg = data?.error?.message || 'Kunne ikke verifisere nøkkel';
+            showToast(`⚠️ ${msg}`);
         }
     } catch (error) {
         console.error('OpenAI test error:', error);
@@ -8795,6 +8812,11 @@ async function handleScannerUpload(event) {
 window.handleScannerUpload = handleScannerUpload;
 
 let identifiedItemsData = [];
+let lastAIScanMeta = {
+    provider: 'none',
+    model: null,
+    error: null
+};
 
 async function analyzeImage(imageData) {
     const resultsDiv = $('scannerResults');
@@ -8813,6 +8835,12 @@ async function analyzeImage(imageData) {
     try {
         // Use OpenAI Vision API to analyze the image
         const items = await analyzeImageWithAI(imageData);
+
+        if (lastAIScanMeta.provider && lastAIScanMeta.provider !== 'fallback') {
+            const providerName = lastAIScanMeta.provider === 'openai' ? 'GPT (OpenAI)' : 'Gemini';
+            const modelText = lastAIScanMeta.model ? ` • ${lastAIScanMeta.model}` : '';
+            showToast(`🤖 AI brukt: ${providerName}${modelText}`, 'info');
+        }
         
         if (items.length === 0) {
             itemsDiv.innerHTML = `
@@ -8866,28 +8894,91 @@ async function analyzeImage(imageData) {
 }
 
 async function analyzeImageWithAI(imageData) {
+    lastAIScanMeta = { provider: 'none', model: null, error: null };
+
     // Prefer OpenAI (ChatGPT) first, then Gemini, then fallback
     const openaiKey = localStorage.getItem('kokebok_openai_key') || localStorage.getItem('openai_api_key');
     const geminiKey = localStorage.getItem('kokebok_gemini_key');
 
     if (openaiKey) {
         try {
-            return await analyzeWithOpenAI(imageData, openaiKey);
+            const items = await analyzeWithOpenAI(imageData, openaiKey);
+            lastAIScanMeta.provider = 'openai';
+            return items;
         } catch (e) {
+            lastAIScanMeta.error = e?.message || String(e);
             console.warn('OpenAI API error, trying fallback:', e.message);
         }
     }
 
     if (geminiKey) {
         try {
-            return await analyzeWithGemini(imageData, geminiKey);
+            const items = await analyzeWithGemini(imageData, geminiKey);
+            lastAIScanMeta.provider = 'gemini';
+            return items;
         } catch (e) {
+            lastAIScanMeta.error = e?.message || String(e);
             console.warn('Gemini API error:', e.message);
         }
     }
     
     // Fallback to basic pattern recognition
+    lastAIScanMeta.provider = 'fallback';
     return basicImageAnalysis(imageData);
+}
+
+function parseAiItemsFromText(content) {
+    if (!content) return [];
+
+    let parsed = null;
+    const raw = String(content).trim();
+
+    // 1) Try full JSON parse first
+    try {
+        parsed = JSON.parse(raw);
+    } catch (e) {}
+
+    // 2) Try fenced JSON
+    if (!parsed) {
+        const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (fenced?.[1]) {
+            try {
+                parsed = JSON.parse(fenced[1]);
+            } catch (e) {}
+        }
+    }
+
+    // 3) Try extracting first array in text
+    if (!parsed) {
+        const arrMatch = raw.match(/\[[\s\S]*\]/);
+        if (arrMatch?.[0]) {
+            try {
+                parsed = JSON.parse(arrMatch[0]);
+            } catch (e) {}
+        }
+    }
+
+    // Support object wrappers
+    let items = [];
+    if (Array.isArray(parsed)) {
+        items = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+        items = parsed.items || parsed.products || parsed.ingredients || [];
+    }
+
+    if (!Array.isArray(items)) return [];
+
+    return items
+        .map(item => {
+            const name = getItemName(item).trim();
+            if (!name) return null;
+            return {
+                name,
+                quantity: Number(item?.quantity) > 0 ? Number(item.quantity) : 1,
+                unit: item?.unit ? String(item.unit).trim() : 'stk'
+            };
+        })
+        .filter(Boolean);
 }
 
 // Google Gemini Vision API (FREE tier available!)
@@ -8970,51 +9061,69 @@ Ikke inkluder noen forklaring eller annen tekst - BARE JSON-arrayet.`
 
 // OpenAI Vision API (requires paid API key)
 async function analyzeWithOpenAI(imageData, apiKey) {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            model: 'gpt-4o',
-            messages: [
-                {
-                    role: 'system',
-                    content: `Du er en ekspert på å identifisere matvarer i bilder. 
-                    Analyser bildet og list opp alle synlige matvarer.
-                    For hver vare, estimer mengden.
-                    Svar BARE med JSON i dette formatet:
-                    [{"name": "Melk", "quantity": 1, "unit": "liter"}, ...]
-                    Bruk norske navn. Ikke inkluder forklaringer.`
+    const candidateModels = ['gpt-4o-mini', 'gpt-4o'];
+
+    let lastError = null;
+    for (const model of candidateModels) {
+        try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
                 },
-                {
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: 'Identifiser alle matvarer i dette bildet:' },
-                        { type: 'image_url', image_url: { url: imageData } }
-                    ]
-                }
-            ],
-            max_tokens: 1000
-        })
-    });
-    
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '[]';
-    
-    // Parse JSON from response
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+                body: JSON.stringify({
+                    model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `Du er en ekspert på å identifisere matvarer i bilder.
+Analyser bildet og list opp alle synlige matvarer.
+Svar KUN med gyldig JSON.
+Format:
+[{"name":"melk","quantity":1,"unit":"liter"}]
+Bruk norske navn. Ikke legg til forklaringer.`
+                        },
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: 'Identifiser alle matvarer i dette bildet.' },
+                                { type: 'image_url', image_url: { url: imageData } }
+                            ]
+                        }
+                    ],
+                    max_tokens: 1000,
+                    temperature: 0.1
+                })
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                const msg = data?.error?.message || `OpenAI API error: ${response.status}`;
+                throw new Error(msg);
+            }
+
+            const content = data?.choices?.[0]?.message?.content || '';
+            const items = parseAiItemsFromText(content);
+
+            lastAIScanMeta.model = model;
+            if (items.length > 0) return items;
+
+            // If model responded but no parsable items, treat as no-result (not hard fail)
+            return [];
+        } catch (e) {
+            lastError = e;
+            console.warn(`OpenAI vision model ${model} failed:`, e?.message || e);
+        }
     }
-    
-    return [];
+
+    throw lastError || new Error('OpenAI vision failed');
 }
 
 function basicImageAnalysis(imageData) {
-    // Fallback: Return empty array and suggest getting Gemini API key
-    showToast('🌟 For AI-skanning: Hent GRATIS Gemini API-nøkkel i innstillinger!', 'info');
+    // Fallback: Return empty array and suggest configuring AI keys
+    showToast('🤖 For AI-skanning: legg inn OpenAI API-nøkkel i Innstillinger (GPT foretrukket).', 'info');
     return [];
 }
 
