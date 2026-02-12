@@ -21,6 +21,8 @@ let timerInterval = null;
 let timerSeconds = 0;
 let timerRunning = false;
 let timerLabel = '';
+let timerEndAt = null;
+const TIMER_STORAGE_KEY = 'kokebok_timer_state_v1';
 
 // ===== Language State =====
 let currentLanguage = localStorage.getItem('kokebok_language') || 'no';
@@ -173,9 +175,9 @@ function on(id, event, handler) {
 }
 
 function escapeHtml(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
 }
 
@@ -207,13 +209,54 @@ function getIngredientsAsString(ingredients) {
 
 // Helper to get shopping item name as string
 function getItemName(item) {
-    if (!item) return '';
-    if (typeof item === 'string') return item;
+    if (item === null || item === undefined) return '';
+    if (typeof item === 'string' || typeof item === 'number') return String(item);
     if (typeof item === 'object') {
-        if (item.text) return String(item.text);
-        if (item.name) return String(item.name);
+        const candidates = [
+            item.text,
+            item.name,
+            item.item,
+            item.title,
+            item.ingredient,
+            item.product,
+            item.value
+        ];
+        for (const c of candidates) {
+            if (c === null || c === undefined) continue;
+            const s = String(c).trim();
+            if (s) return s;
+        }
+        // As a last resort, try a readable representation
+        try {
+            const json = JSON.stringify(item);
+            if (json && json !== '{}' && json !== '[]') return json;
+        } catch (e) {}
     }
-    return String(item);
+    return '';
+}
+
+function normalizeShoppingListItems(list) {
+    if (!Array.isArray(list)) return [];
+    const normalized = [];
+    const seen = new Set();
+    for (const raw of list) {
+        const text = getItemName(raw).trim();
+        if (!text) continue;
+        const key = text.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            normalized.push({
+                ...raw,
+                text,
+                checked: !!raw.checked
+            });
+        } else {
+            normalized.push({ text, checked: false });
+        }
+    }
+    return normalized;
 }
 
 // View a recipe by ID - used by modals and quick actions
@@ -729,9 +772,13 @@ function applySettings() {
     // Load OpenAI key from localStorage
     const openaiKeyInput = $('openaiKeyInput');
     if (openaiKeyInput) {
-        const savedKey = localStorage.getItem('openai_api_key');
-        if (savedKey) {
-            openaiKeyInput.value = savedKey;
+        const savedKey = localStorage.getItem('kokebok_openai_key') || localStorage.getItem('openai_api_key');
+        if (savedKey) openaiKeyInput.value = savedKey;
+
+        // Migrate legacy key name
+        if (!localStorage.getItem('kokebok_openai_key') && localStorage.getItem('openai_api_key')) {
+            localStorage.setItem('kokebok_openai_key', localStorage.getItem('openai_api_key'));
+            localStorage.removeItem('openai_api_key');
         }
     }
     
@@ -829,17 +876,19 @@ function saveOpenAIKey() {
     
     const key = keyInput.value.trim();
     if (key) {
-        localStorage.setItem('openai_api_key', key);
-        showToast('✅ API-nøkkel lagret!');
-    } else {
+        localStorage.setItem('kokebok_openai_key', key);
         localStorage.removeItem('openai_api_key');
-        showToast('🗑️ API-nøkkel fjernet');
+        showToast('✅ OpenAI API-nøkkel lagret!');
+    } else {
+        localStorage.removeItem('kokebok_openai_key');
+        localStorage.removeItem('openai_api_key');
+        showToast('🗑️ OpenAI API-nøkkel fjernet');
     }
 }
 
 // v4.2 - Test OpenAI Connection
 async function testOpenAIConnection() {
-    const key = localStorage.getItem('openai_api_key');
+    const key = localStorage.getItem('kokebok_openai_key') || localStorage.getItem('openai_api_key');
     
     if (!key) {
         showToast('⚠️ Ingen API-nøkkel lagret');
@@ -1938,6 +1987,7 @@ function addScaledToShoppingList() {
     }
     
     if (added > 0) {
+        state.shoppingList = normalizeShoppingListItems(state.shoppingList);
         saveShoppingList();
         showToast(`${added} ingrediens${added > 1 ? 'er' : ''} lagt til i handlelisten!`, 'success');
     } else {
@@ -4106,7 +4156,8 @@ function renderShoppingList() {
 function addShoppingItem() {
     const item = prompt('Legg til vare:');
     if (item && item.trim()) {
-        state.shoppingList.push({ text: item.trim(), checked: false });
+        state.shoppingList.push({ text: item.trim(), checked: false, addedAt: Date.now() });
+        state.shoppingList = normalizeShoppingListItems(state.shoppingList);
         saveShoppingList();
         renderShoppingList();
     }
@@ -4121,9 +4172,98 @@ function clearCheckedItems() {
 
 async function saveShoppingList() {
     try {
+        state.shoppingList = normalizeShoppingListItems(state.shoppingList);
         await saveToFirestore('settings', 'shoppingList', { data: state.shoppingList });
     } catch (e) {
         console.warn('Could not save shopping list:', e);
+    }
+}
+
+// ===== TIMER PERSISTENCE (for floating/home sync) =====
+function persistTimerState() {
+    try {
+        const stateToSave = {
+            seconds: timerSeconds,
+            running: !!timerRunning,
+            label: timerLabel || '',
+            endAt: timerRunning && timerEndAt ? timerEndAt : null,
+            updatedAt: Date.now()
+        };
+        localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+        // ignore
+    }
+}
+
+function clearPersistedTimerState() {
+    try {
+        localStorage.removeItem(TIMER_STORAGE_KEY);
+    } catch (e) {
+        // ignore
+    }
+}
+
+function tickTimerFromEndAt() {
+    if (!timerRunning || !timerEndAt) return;
+    const remaining = Math.max(0, Math.ceil((timerEndAt - Date.now()) / 1000));
+    timerSeconds = remaining;
+    renderTimerDisplay();
+
+    if (remaining <= 0) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        timerRunning = false;
+        timerEndAt = null;
+        persistTimerState();
+        timerFinished();
+    }
+}
+
+function startTimerTicker() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        if (timerRunning && timerEndAt) {
+            tickTimerFromEndAt();
+        } else if (timerRunning) {
+            // Safety fallback if endAt is missing
+            if (timerSeconds > 0) timerSeconds--;
+            renderTimerDisplay();
+            if (timerSeconds <= 0) {
+                timerRunning = false;
+                persistTimerState();
+                timerFinished();
+            }
+        }
+    }, 1000);
+}
+
+function restoreTimerState() {
+    try {
+        const raw = localStorage.getItem(TIMER_STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        timerLabel = saved?.label || '';
+
+        if (saved?.running && saved?.endAt) {
+            timerEndAt = saved.endAt;
+            const remaining = Math.max(0, Math.ceil((timerEndAt - Date.now()) / 1000));
+            timerSeconds = remaining;
+            timerRunning = remaining > 0;
+            renderTimerDisplay();
+            if (timerRunning) startTimerTicker();
+            else {
+                timerEndAt = null;
+                persistTimerState();
+            }
+            return;
+        }
+
+        timerRunning = false;
+        timerEndAt = null;
+        timerSeconds = Math.max(0, parseInt(saved?.seconds) || 0);
+        renderTimerDisplay();
+    } catch (e) {
+        // ignore
     }
 }
 
@@ -4164,8 +4304,11 @@ function setupTimerEvents() {
             if (minutes > 0) {
                 timerSeconds = minutes * 60;
                 timerLabel = `${minutes} min`;
+                timerEndAt = null;
+                timerRunning = false;
                 $$('.timer-preset').forEach(p => p.classList.remove('active'));
                 renderTimerDisplay();
+                persistTimerState();
                 showToast(`Timer satt til ${minutes} minutter`, 'success');
             } else {
                 showToast('Skriv inn antall minutter', 'warning');
@@ -4179,9 +4322,12 @@ function setupTimerEvents() {
             const minutes = parseInt(preset.dataset.minutes);
             timerSeconds = minutes * 60;
             timerLabel = preset.textContent;
+            timerEndAt = null;
+            timerRunning = false;
             $$('.timer-preset').forEach(p => p.classList.remove('active'));
             preset.classList.add('active');
             renderTimerDisplay();
+            persistTimerState();
         };
     });
     
@@ -4255,38 +4401,34 @@ function startTimer() {
         showToast('Velg en tid først', 'warning');
         return;
     }
-    
+
     timerRunning = true;
-    
-    timerInterval = setInterval(() => {
-        if (timerSeconds > 0) {
-            timerSeconds--;
-            renderTimerDisplay();
-        } else {
-            // Timer finished!
-            clearInterval(timerInterval);
-            timerRunning = false;
-            renderTimerDisplay();
-            timerFinished();
-        }
-    }, 1000);
-    
+    timerEndAt = Date.now() + (timerSeconds * 1000);
+    persistTimerState();
+    startTimerTicker();
+
     renderTimerDisplay();
     showToast('Timer startet! ⏱️', 'success');
 }
 
 function pauseTimer() {
     clearInterval(timerInterval);
+    timerInterval = null;
     timerRunning = false;
+    timerEndAt = null;
+    persistTimerState();
     renderTimerDisplay();
 }
 
 function resetTimer() {
     clearInterval(timerInterval);
+    timerInterval = null;
     timerRunning = false;
     timerSeconds = 0;
     timerLabel = '';
+    timerEndAt = null;
     $$('.timer-preset').forEach(p => p.classList.remove('active'));
+    clearPersistedTimerState();
     renderTimerDisplay();
 }
 
@@ -4634,6 +4776,7 @@ function closeGenericModal() {
 document.addEventListener('DOMContentLoaded', () => {
     setupAuth();
     requestNotificationPermission();
+    restoreTimerState();
 });
 
 // Load extra settings after user login
@@ -4651,11 +4794,7 @@ async function loadExtraSettings() {
         // Load shopping list
         const shoppingDoc = favSettings.find(s => s.id === 'shoppingList');
         if (shoppingDoc?.data) {
-            state.shoppingList = shoppingDoc.data
-                .map(item => {
-                    const text = getItemName(item);
-                    return text ? { ...item, text } : item;
-                });
+            state.shoppingList = normalizeShoppingListItems(shoppingDoc.data);
         }
         
         updateFavoritesCount();
@@ -7477,7 +7616,7 @@ function openEquipmentEditor(equipmentId = null) {
             
             <div class="form-group">
                 <label>Bilde</label>
-                <div class="image-upload-area" onclick="$('equipImageInput').click()">
+                <div class="image-upload-area" onclick="document.getElementById('equipImageInput').click()">
                     <input type="file" id="equipImageInput" accept="image/*" hidden onchange="previewEquipmentImage(event)">
                     <div id="equipImagePreview" class="image-preview">
                         ${existing?.image ? `<img src="${existing.image}" alt="Utstyr">` : '<span>📷 Klikk for å legge til bilde</span>'}
@@ -8727,23 +8866,23 @@ async function analyzeImage(imageData) {
 }
 
 async function analyzeImageWithAI(imageData) {
-    // Try Gemini first (free), then OpenAI, then fallback
+    // Prefer OpenAI (ChatGPT) first, then Gemini, then fallback
+    const openaiKey = localStorage.getItem('kokebok_openai_key') || localStorage.getItem('openai_api_key');
     const geminiKey = localStorage.getItem('kokebok_gemini_key');
-    const openaiKey = localStorage.getItem('kokebok_openai_key');
-    
-    if (geminiKey) {
-        try {
-            return await analyzeWithGemini(imageData, geminiKey);
-        } catch (e) {
-            console.warn('Gemini API error, trying fallback:', e.message);
-        }
-    }
-    
+
     if (openaiKey) {
         try {
             return await analyzeWithOpenAI(imageData, openaiKey);
         } catch (e) {
-            console.warn('OpenAI API error:', e.message);
+            console.warn('OpenAI API error, trying fallback:', e.message);
+        }
+    }
+
+    if (geminiKey) {
+        try {
+            return await analyzeWithGemini(imageData, geminiKey);
+        } catch (e) {
+            console.warn('Gemini API error:', e.message);
         }
     }
     
@@ -9180,7 +9319,17 @@ async function calculateShoppingListPrices() {
                 cheapestStore: priceInfo.products.find(p => p.price === minPrice)?.store
             };
         }
-        return item;
+        // Fallback estimate when API fails/no match
+        const estimate = estimateIngredientPrice(name);
+        const minPrice = Math.max(1, Math.round((estimate.price || 25) * 0.9));
+        const maxPrice = Math.max(minPrice, Math.round((estimate.price || 25) * 1.1));
+        totalMin += minPrice;
+        totalMax += maxPrice;
+        return {
+            ...item,
+            priceRange: { min: minPrice, max: maxPrice },
+            cheapestStore: 'Estimat'
+        };
     });
     
     // Update shopping list display with prices
@@ -9189,12 +9338,13 @@ async function calculateShoppingListPrices() {
 window.calculateShoppingListPrices = calculateShoppingListPrices;
 
 function showShoppingListWithPrices(items, totalMin, totalMax) {
+    const hasAnyPrices = items.some(i => i && i.priceRange && (i.priceRange.min || i.priceRange.max));
     const html = `
         <div class="priced-shopping-list">
             <div class="price-estimate-header">
                 <h3>💰 Prisestimat</h3>
                 <div class="total-estimate">
-                    <span class="estimate-range">${formatCurrency(totalMin)} - ${formatCurrency(totalMax)}</span>
+                    <span class="estimate-range">${hasAnyPrices ? `${formatCurrency(totalMin)} - ${formatCurrency(totalMax)}` : '-'}</span>
                     <span class="estimate-label">estimert total</span>
                 </div>
             </div>
@@ -9241,7 +9391,11 @@ async function calculateRecipeCost(recipe) {
             const searchResult = await searchProducts(parsed.name, { size: 1 });
             if (searchResult.data && searchResult.data.length > 0) {
                 const product = searchResult.data[0];
-                const price = product.current_price?.price || 0;
+                let price = product.current_price?.price || 0;
+                if (!price || price <= 0) {
+                    const estimate = estimateIngredientPrice(parsed.name);
+                    price = Math.round((estimate.price || 25) * 0.3);
+                }
                 totalCost += price;
                 breakdown.push({
                     ingredient: parsed.name,
@@ -9249,9 +9403,29 @@ async function calculateRecipeCost(recipe) {
                     product: product.name,
                     store: product.store?.name
                 });
+            } else {
+                // No API match, use local estimate
+                const estimate = estimateIngredientPrice(parsed.name);
+                const price = Math.round((estimate.price || 25) * 0.3);
+                totalCost += price;
+                breakdown.push({
+                    ingredient: parsed.name,
+                    price,
+                    product: `${estimate.match || 'estimat'} (${estimate.unit || 'stk'})`,
+                    store: 'Estimat'
+                });
             }
         } catch (e) {
-            // Skip on error
+            // Fallback on error
+            const estimate = estimateIngredientPrice(parsed.name);
+            const price = Math.round((estimate.price || 25) * 0.3);
+            totalCost += price;
+            breakdown.push({
+                ingredient: parsed.name,
+                price,
+                product: `${estimate.match || 'estimat'} (${estimate.unit || 'stk'})`,
+                store: 'Estimat'
+            });
         }
     }
     
@@ -12845,10 +13019,11 @@ function processQuickAdd() {
         return;
     }
     
+    if (!state.shoppingList) state.shoppingList = [];
     items.forEach(item => {
-        if (!state.shoppingList) state.shoppingList = [];
-        state.shoppingList.push({ name: item, amount: '' });
+        state.shoppingList.push({ text: item, checked: false, addedAt: Date.now() });
     });
+    state.shoppingList = normalizeShoppingListItems(state.shoppingList);
     
     saveShoppingList();
     closeGenericModal();
@@ -15595,12 +15770,11 @@ window.addBatchToShoppingList = addBatchToShoppingList;
 function addToShoppingListDirect(item) {
     if (!state.shoppingList) state.shoppingList = [];
     
-    const existing = state.shoppingList.find(i => 
-        (typeof i === 'string' ? i : i.name).toLowerCase() === item.toLowerCase()
-    );
+    const existing = state.shoppingList.find(i => getItemName(i).toLowerCase() === item.toLowerCase());
     
     if (!existing) {
-        state.shoppingList.push({ name: item, checked: false, addedAt: Date.now() });
+        state.shoppingList.push({ text: item, checked: false, addedAt: Date.now() });
+        state.shoppingList = normalizeShoppingListItems(state.shoppingList);
         saveShoppingList();
     }
 }
@@ -16459,6 +16633,18 @@ async function persistCurrentImageRotation() {
 
     rotations[viewerIndex] = currentImageRotation;
     state.currentRecipe.imageRotations = rotations;
+
+    // Keep viewer state in sync when navigating images
+    if (Array.isArray(viewerImageRotations)) {
+        while (viewerImageRotations.length < viewerImages.length) viewerImageRotations.push(0);
+        viewerImageRotations[viewerIndex] = currentImageRotation;
+    }
+
+    // Ensure the recipe in the master list also gets updated (so it persists on recipe page)
+    const recipeIndex = state.recipes?.findIndex(r => r.id === viewerImageRecipeId) ?? -1;
+    if (recipeIndex >= 0) {
+        state.recipes[recipeIndex].imageRotations = rotations;
+    }
 
     const galleryImg = document.querySelector(`.gallery-image[data-index="${viewerIndex}"]`);
     if (galleryImg) {

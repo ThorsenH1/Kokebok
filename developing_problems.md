@@ -68,7 +68,7 @@ Fikse legg i handlekurv fra oppskrift. Hvis man da etter å lagt i handlekurv sj
 Hvis man endrer rotasjon på bilde, så må det bli lagret på selve oppskrift siden også, ikke bare midlertidig. 
 
 
-Problemer med prisestimat. 
+Problemer med prisestimat. Står bare 0 på alt`. Problemer med api sikkert.
 
 
 Fortsatt problemer med timer funksjon. Timeren starter der jeg velger tidspunkt, men den timeren som ligger på f.eks hjemskjermen oppdaterer seg ikke. Den står bare på 00.00 hele tiden.
