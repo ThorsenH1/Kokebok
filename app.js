@@ -916,6 +916,8 @@ async function testOpenAIConnection() {
         });
 
         const data = await response.json().catch(() => ({}));
+        const apiErrorCode = data?.error?.code || '';
+        const apiErrorMsg = data?.error?.message || '';
 
         if (response.ok) {
             const answer = data?.choices?.[0]?.message?.content?.trim() || 'OK';
@@ -923,9 +925,15 @@ async function testOpenAIConnection() {
         } else if (response.status === 401) {
             showToast('❌ Ugyldig OpenAI API-nøkkel');
         } else if (response.status === 429) {
-            showToast('⚠️ Rate limit/kvote nådd for OpenAI', 'warning');
+            if (apiErrorCode === 'insufficient_quota' || /insufficient_quota|billing|quota/i.test(apiErrorMsg)) {
+                showToast('⚠️ OpenAI API mangler aktiv kvote/betaling (ChatGPT-abonnement er separat)', 'warning');
+            } else {
+                showToast('⚠️ Rate limit nådd for OpenAI (for mange kall på kort tid)', 'warning');
+            }
+        } else if (response.status === 403) {
+            showToast('⚠️ OpenAI-prosjektet mangler tilgang/rettigheter til modellen', 'warning');
         } else {
-            const msg = data?.error?.message || 'Kunne ikke verifisere nøkkel';
+            const msg = apiErrorMsg || 'Kunne ikke verifisere nøkkel';
             showToast(`⚠️ ${msg}`);
         }
     } catch (error) {
@@ -994,10 +1002,14 @@ async function testGeminiConnection() {
         } else {
             const errorData = await response.json().catch(() => ({}));
             const errorMsg = errorData.error?.message || 'Ukjent feil';
+            const lowerError = String(errorMsg).toLowerCase();
             
-            if (response.status === 429 || errorMsg.includes('quota') || errorMsg.includes('Quota exceeded')) {
+            if (response.status === 429 || lowerError.includes('quota') || lowerError.includes('rate')) {
                 // Quota exceeded - show detailed modal
                 showGeminiQuotaExceededModal();
+                if (lowerError.includes('billing') || lowerError.includes('paid') || lowerError.includes('free tier')) {
+                    showToast('⚠️ Gemini krever aktiv kvote/billing i Google AI Studio/Cloud-prosjektet', 'warning');
+                }
             } else if (response.status === 400 && errorMsg.includes('API key')) {
                 showToast('❌ Ugyldig Gemini API-nøkkel', 'error');
             } else if (response.status === 403) {
