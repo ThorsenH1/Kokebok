@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
     <link rel="apple-touch-icon" href="icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=4.5.4">
+    <link rel="stylesheet" href="style.css?v=5.0.0">
 </head>
 <body>
     <!-- Login Screen -->
@@ -177,7 +177,6 @@
                     <button id="searchRecipesBtn" class="feature-btn search-btn">
                         <span class="feature-icon">🔍</span>
                         <span class="feature-text">Finn oppskrifter</span>
-                        <span class="feature-badge">Ny!</span>
                     </button>
                     <button id="mealPlannerBtn" class="feature-btn planner-btn">
                         <span class="feature-icon">📅</span>
@@ -829,6 +828,9 @@
                 <button class="menu-item" id="menuFavorites">
                     <span>⭐</span> Favoritter
                 </button>
+                <button class="menu-item" onclick="openCollections(); toggleSideMenu(false);">
+                    <span>📁</span> Mine samlinger
+                </button>
                 <button class="menu-item" id="menuShoppingList">
                     <span>🛒</span> Handleliste
                 </button>
@@ -864,9 +866,6 @@
                         <button class="menu-item" onclick="openMealPrepAssistant(); toggleSideMenu(false);">
                             <span>🥡</span> Meal Prep
                         </button>
-                        <button class="menu-item" onclick="showRecipeOfTheDay(); toggleSideMenu(false);">
-                            <span>🎲</span> Dagens oppskrift
-                        </button>
                     </div>
                 </div>
                 
@@ -888,6 +887,10 @@
                         </button>
                         <button class="menu-item" onclick="openBudgetPlanner(); toggleSideMenu(false);">
                             <span>💵</span> Ukesbudsjett
+                        </button>
+                        <button class="menu-item" onclick="openSmartShopping(); toggleSideMenu(false);">
+                            <span>🧠</span> Smart Handlehjelp
+                            <span class="menu-badge ai">AI</span>
                         </button>
                     </div>
                 </div>
@@ -911,7 +914,6 @@
                         </button>
                         <button class="menu-item" onclick="openPriceChecker(); toggleSideMenu(false);">
                             <span>💰</span> Prissammenligning
-                            <span class="menu-badge new">NY</span>
                         </button>
                     </div>
                 </div>
@@ -923,44 +925,47 @@
                         <span class="menu-section-arrow">▼</span>
                     </div>
                     <div class="menu-section-content">
+                        <button class="menu-item" id="menuTimer">
+                            <span>⏱️</span> Koketimer
+                        </button>
                         <button class="menu-item" onclick="openMeasurementCalculator(); toggleSideMenu(false);">
                             <span>📐</span> Mål og vekt
                         </button>
                         <button class="menu-item" onclick="openKitchenCalculator(); toggleSideMenu(false);">
                             <span>🧮</span> Kjøkken-kalkulator
-                            <span class="menu-badge new">NY</span>
                         </button>
                         <button class="menu-item" onclick="openRecipeScaler(); toggleSideMenu(false);">
                             <span>⚖️</span> Skalér oppskrift
                         </button>
                         <button class="menu-item" onclick="openRecipeCostCalculator(); toggleSideMenu(false);">
                             <span>💰</span> Kostnadskalkulator
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                        <button class="menu-item" onclick="openLeftoverSuggester(); toggleSideMenu(false);">
-                            <span>🥡</span> Rester-hjelper
-                        </button>
-                        <button class="menu-item" id="menuTimer">
-                            <span>⏱️</span> Koketimer
-                        </button>
-                        <button class="menu-item" onclick="openCookingDiary(); toggleSideMenu(false);">
-                            <span>📅</span> Matkalender
                         </button>
                         <button class="menu-item" onclick="openNutritionCalculator(); toggleSideMenu(false);">
                             <span>🥗</span> Næringsinnhold
                         </button>
+                        <button class="menu-item" onclick="openSubstitutionFinder(); toggleSideMenu(false);">
+                            <span>🔄</span> Ingrediens-erstatter
+                        </button>
                         <button class="menu-item" onclick="openMeatTemperatureGuide(); toggleSideMenu(false);">
-                            <span>🌡️</span> Kjøtttemperaturer
+                            <span>🥩</span> Steketemperaturer
+                        </button>
+                        <button class="menu-item" onclick="openLeftoverSuggester(); toggleSideMenu(false);">
+                            <span>🥡</span> Rester-hjelper
+                        </button>
+                        <button class="menu-item" onclick="openBatchCookingPlanner(); toggleSideMenu(false);">
+                            <span>🍲</span> Batch Cooking
+                        </button>
+                        <button class="menu-item" onclick="openCookingDiary(); toggleSideMenu(false);">
+                            <span>📅</span> Matkalender
+                        </button>
+                        <button class="menu-item" onclick="openSeasonalCalendar(); toggleSideMenu(false);">
+                            <span>🌱</span> Sesongkalender
                         </button>
                         <button class="menu-item" onclick="openWinePairing(); toggleSideMenu(false);">
                             <span>🍷</span> Vinanbefaling
                         </button>
                         <button class="menu-item" onclick="openCookingPlaylist(); toggleSideMenu(false);">
                             <span>🎵</span> Kokemusikk
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                        <button class="menu-item" onclick="openSeasonalCalendar(); toggleSideMenu(false);">
-                            <span>🌱</span> Sesongkalender
                         </button>
                         <button class="menu-item" onclick="showVoiceHelp(); toggleSideMenu(false);">
                             <span>🎤</span> Stemmekommandoer
@@ -978,7 +983,6 @@
                     <div class="menu-section-content">
                         <button class="menu-item" onclick="openStatsDashboard(); toggleSideMenu(false);">
                             <span>📈</span> Dashboard
-                            <span class="menu-badge new">NY</span>
                         </button>
                         <button class="menu-item" onclick="showTopRatedRecipes(); toggleSideMenu(false);">
                             <span>⭐</span> Toppratede
@@ -994,7 +998,6 @@
                         </button>
                         <button class="menu-item" onclick="openWasteTracker(); toggleSideMenu(false);">
                             <span>♻️</span> Matsvinn-tracker
-                            <span class="menu-badge new">NY</span>
                         </button>
                     </div>
                 </div>
@@ -1017,45 +1020,6 @@
                         </button>
                         <button class="menu-item" onclick="showWeeklyReport(); toggleSideMenu(false);">
                             <span>📊</span> Ukerapport
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Verktøy - sammenleggbar -->
-                <div class="menu-section collapsible" data-section="tools">
-                    <div class="menu-section-header" onclick="toggleMenuSection('tools')">
-                        <span class="menu-section-title">🛠️ Verktøy</span>
-                        <span class="menu-section-arrow">▼</span>
-                    </div>
-                    <div class="menu-section-content">
-                        <button class="menu-item" onclick="openCollections(); toggleSideMenu(false);">
-                            <span>📁</span> Mine samlinger
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                        <button class="menu-item" onclick="openSubstitutionFinder(); toggleSideMenu(false);">
-                            <span>🔄</span> Ingrediens-erstatter
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                        <button class="menu-item" onclick="openTemperatureConverter(); toggleSideMenu(false);">
-                            <span>🌡️</span> Temperaturomregner
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                        <button class="menu-item" onclick="openMeatTemperatureGuide(); toggleSideMenu(false);">
-                            <span>🥩</span> Steketemperaturer
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                        <button class="menu-item" onclick="openBatchCookingPlanner(); toggleSideMenu(false);">
-                            <span>🍲</span> Batch Cooking
-                            <span class="menu-badge new">NY</span>
-                        </button>
-                        <button class="menu-item" onclick="openSmartShopping(); toggleSideMenu(false);">
-                            <span>🧠</span> Smart Handlehjelp
-                            <span class="menu-badge ai">AI</span>
-                        </button>
-                        <button class="menu-item" onclick="openQuickAdd(); toggleSideMenu(false);">
-                            <span>➕</span> Hurtigregistrering
-                            <span class="menu-badge new">NY</span>
                         </button>
                     </div>
                 </div>
@@ -1411,7 +1375,21 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-config.js?v=4.0"></script>
-    <script src="app.js?v=4.5.4"></script>
+    <script src="firebase-config.js?v=5.0.0"></script>
+    <script src="js/01-core.js?v=5.0.0"></script>
+    <script src="js/02-navigation-dashboard.js?v=5.0.0"></script>
+    <script src="js/03-recipes.js?v=5.0.0"></script>
+    <script src="js/04-books-categories.js?v=5.0.0"></script>
+    <script src="js/05-search-mealplan.js?v=5.0.0"></script>
+    <script src="js/06-shopping-timer.js?v=5.0.0"></script>
+    <script src="js/07-gamification.js?v=5.0.0"></script>
+    <script src="js/08-social-push.js?v=5.0.0"></script>
+    <script src="js/09-equipment-pantry.js?v=5.0.0"></script>
+    <script src="js/10-prices-ai-scanner.js?v=5.0.0"></script>
+    <script src="js/11-premium-tools.js?v=5.0.0"></script>
+    <script src="js/12-calculators-planners.js?v=5.0.0"></script>
+    <script src="js/13-nutrition-voice-stats.js?v=5.0.0"></script>
+    <script src="js/14-guides-converters.js?v=5.0.0"></script>
+    <script src="js/15-collections-misc.js?v=5.0.0"></script>
 </body>
 </html>

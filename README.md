@@ -199,15 +199,33 @@ const DEFAULT_CATEGORIES = [
 Kokebok/
 ├── index.html          # Hovedside med HTML-struktur
 ├── style.css           # All styling
-├── app.js              # Hovedapplikasjon
+├── js/                 # Applikasjonskode, delt i moduler (lastes i rekkefølge)
+│   ├── 01-core.js                  # Konfig, state, Firestore, auth, init
+│   ├── 02-navigation-dashboard.js  # Navigasjon, sidemeny, dashbord
+│   ├── 03-recipes.js               # Oppskrifter (liste, visning, editor)
+│   ├── 04-books-categories.js      # Kokebøker, kategorier, bildeviser
+│   ├── 05-search-mealplan.js       # Oppskriftssøk, ukemeny
+│   ├── 06-shopping-timer.js        # Handleliste, timer
+│   ├── 07-gamification.js          # XP, prestasjoner, dagens oppskrift
+│   ├── 08-social-push.js           # Venner, deling, push-varsler
+│   ├── 09-equipment-pantry.js      # Utstyr og matkammer
+│   ├── 10-prices-ai-scanner.js     # Kassal-priser, AI-skanner
+│   ├── 11-premium-tools.js         # Statistikk, budsjett, import m.m.
+│   ├── 12-calculators-planners.js  # Kalkulatorer, handlemodus, dagbok
+│   ├── 13-nutrition-voice-stats.js # Næring, talekommandoer, matsvinn
+│   ├── 14-guides-converters.js     # Guider, konverterere, print, QR
+│   └── 15-collections-misc.js      # Samlinger, batch cooking, m.m.
 ├── firebase-config.js  # Firebase-konfigurasjon
 ├── manifest.json       # PWA-manifest
-├── sw.js               # Service Worker
+├── sw.js               # Service Worker (network-first, versjonert cache)
+├── firestore.rules     # Firestore sikkerhetsregler
 ├── README.md           # Denne filen
 └── icons/
     ├── icon-192.svg    # App-ikon (liten)
     └── icon-512.svg    # App-ikon (stor)
 ```
+
+> **Ved deploy av ny versjon:** oppdater versjonsnummeret tre steder – `CACHE_NAME` i `sw.js`, `APP_VERSION` i `js/01-core.js`, og `?v=`-parametrene i `index.html`. Da får alle brukere ny kode automatisk.
 
 ---
 

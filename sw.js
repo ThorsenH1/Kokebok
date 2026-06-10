@@ -1,78 +1,79 @@
-// Service Worker for Familiens Kokebok v4.5.4
-const CACHE_NAME = 'kokebok-v4.5.4';
-const ASSETS = [
+// Service Worker for Familiens Kokebok v5.0.0
+// Strategi: network-first for appens egne filer (HTML/JS/CSS), cache som offline-fallback.
+// Dette sikrer at brukere alltid får nyeste kode når de er på nett.
+const CACHE_NAME = 'kokebok-v5.0.0';
+const PRECACHE = [
     './',
     './index.html',
-    './style.css?v=4.5.2',
-    './app.js?v=4.5.2',
+    './style.css',
+    './manifest.json',
     './firebase-config.js',
-    './manifest.json'
+    './js/01-core.js',
+    './js/02-navigation-dashboard.js',
+    './js/03-recipes.js',
+    './js/04-books-categories.js',
+    './js/05-search-mealplan.js',
+    './js/06-shopping-timer.js',
+    './js/07-gamification.js',
+    './js/08-social-push.js',
+    './js/09-equipment-pantry.js',
+    './js/10-prices-ai-scanner.js',
+    './js/11-premium-tools.js',
+    './js/12-calculators-planners.js',
+    './js/13-nutrition-voice-stats.js',
+    './js/14-guides-converters.js',
+    './js/15-collections-misc.js'
 ];
 
-// Install - Cache assets
+// Install - precache app-skallet (feiler ikke installasjonen om enkeltfiler mangler)
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then((cache) => {
-                return cache.addAll(ASSETS);
-            })
-            .then(() => {
-                return self.skipWaiting();
-            })
+            .then((cache) => Promise.allSettled(PRECACHE.map((url) => cache.add(url))))
+            .then(() => self.skipWaiting())
     );
 });
 
-// Activate - Clean old caches
+// Activate - rydd gamle cacher og ta kontroll umiddelbart
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys()
-            .then((cacheNames) => {
-                return Promise.all(
-                    cacheNames
-                        .filter((name) => name !== CACHE_NAME)
-                        .map((name) => caches.delete(name))
-                );
-            })
-            .then(() => {
-                return self.clients.claim();
-            })
+            .then((names) => Promise.all(
+                names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))
+            ))
+            .then(() => self.clients.claim())
     );
 });
 
-// Fetch - Network first for API/Firestore, cache for assets
+// Fetch - network-first for egne filer, nettverk for alt annet
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
-    
-    // Let network-only for Firestore, Google APIs, etc.
-    if (url.hostname.includes('firestore') || 
-        url.hostname.includes('googleapis') ||
-        url.hostname.includes('gstatic') ||
-        url.hostname.includes('firebase')) {
+
+    // Firestore, Google APIs osv. går alltid rett på nett
+    if (url.origin !== location.origin || event.request.method !== 'GET') {
         return;
     }
-    
-    // Cache-first for same-origin requests
-    if (url.origin === location.origin) {
-        event.respondWith(
-            caches.match(event.request)
-                .then((cached) => {
-                    // Return cached version or fetch from network
-                    const fetched = fetch(event.request)
-                        .then((response) => {
-                            // Cache successful responses
-                            if (response && response.status === 200) {
-                                const clone = response.clone();
-                                caches.open(CACHE_NAME)
-                                    .then((cache) => cache.put(event.request, clone));
-                            }
-                            return response;
-                        })
-                        .catch(() => cached);
-                    
-                    return cached || fetched;
-                })
-        );
-    }
+
+    event.respondWith(
+        fetch(event.request)
+            .then((response) => {
+                if (response && response.status === 200) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                }
+                return response;
+            })
+            .catch(async () => {
+                // Offline: bruk cache (ignorer ?v=-parametre slik at gamle versjonsnumre treffer)
+                const cached = await caches.match(event.request, { ignoreSearch: true });
+                if (cached) return cached;
+                if (event.request.mode === 'navigate') {
+                    const shell = await caches.match('./index.html', { ignoreSearch: true });
+                    if (shell) return shell;
+                }
+                return Response.error();
+            })
+    );
 });
 
 // Handle messages from clients
@@ -82,12 +83,9 @@ self.addEventListener('message', (event) => {
     }
 });
 
-// ===== PUSH NOTIFICATIONS (v4.1.0) =====
+// ===== PUSH NOTIFICATIONS =====
 
-// Handle push notification events
 self.addEventListener('push', (event) => {
-    console.log('Push received:', event);
-    
     let data = {
         title: 'Familiens Kokebok',
         body: 'Du har en ny melding',
@@ -95,7 +93,7 @@ self.addEventListener('push', (event) => {
         badge: './icons/icon-72.svg',
         tag: 'kokebok-notification'
     };
-    
+
     try {
         if (event.data) {
             const payload = event.data.json();
@@ -104,7 +102,7 @@ self.addEventListener('push', (event) => {
     } catch (e) {
         console.error('Error parsing push data:', e);
     }
-    
+
     const options = {
         body: data.body,
         icon: data.icon || './icons/icon-192.svg',
@@ -115,22 +113,17 @@ self.addEventListener('push', (event) => {
         actions: data.actions || [],
         vibrate: [100, 50, 100]
     };
-    
+
     event.waitUntil(
         self.registration.showNotification(data.title, options)
     );
 });
 
-// Handle notification click
 self.addEventListener('notificationclick', (event) => {
-    console.log('Notification clicked:', event);
-    
     event.notification.close();
-    
-    // Default URL to open
+
     let targetUrl = '/';
-    
-    // Check if notification has specific data
+
     if (event.notification.data) {
         if (event.notification.data.url) {
             targetUrl = event.notification.data.url;
@@ -142,30 +135,25 @@ self.addEventListener('notificationclick', (event) => {
             targetUrl = '/?view=pantry';
         }
     }
-    
-    // Handle action buttons
+
     if (event.action) {
         switch (event.action) {
             case 'view':
-                // Use targetUrl set above
                 break;
             case 'dismiss':
-                return; // Just close the notification
+                return;
             case 'accept':
-                // Handle friend request accept - will need to be handled by app
                 targetUrl = '/?view=friends&action=accept&id=' + (event.notification.data?.requestId || '');
                 break;
         }
     }
-    
+
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then((clientList) => {
-                // If app is already open, focus it
                 for (const client of clientList) {
                     if (client.url.includes(self.location.origin) && 'focus' in client) {
                         return client.focus().then(() => {
-                            // Post message to client to navigate
                             client.postMessage({
                                 type: 'NOTIFICATION_CLICK',
                                 url: targetUrl,
@@ -174,7 +162,6 @@ self.addEventListener('notificationclick', (event) => {
                         });
                     }
                 }
-                // If app is not open, open it
                 if (clients.openWindow) {
                     return clients.openWindow(targetUrl);
                 }
@@ -182,23 +169,10 @@ self.addEventListener('notificationclick', (event) => {
     );
 });
 
-// Handle notification close
-self.addEventListener('notificationclose', (event) => {
-    console.log('Notification closed:', event);
-    
-    // Track notification dismissed (could be sent to analytics)
-    // This is useful for understanding user engagement
-});
-
-// Handle push subscription change
 self.addEventListener('pushsubscriptionchange', (event) => {
-    console.log('Push subscription changed');
-    
     event.waitUntil(
         self.registration.pushManager.subscribe({ userVisibleOnly: true })
             .then((subscription) => {
-                // Send new subscription to server
-                // This would require a backend to store the subscription
                 console.log('New subscription:', subscription);
             })
     );

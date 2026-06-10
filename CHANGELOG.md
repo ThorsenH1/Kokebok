@@ -1,5 +1,23 @@
 # Kokebok Changelog
 
+## v5.0.0 - Stor refaktorering og feilretting 🔧
+**Released:** 10. juni 2026
+
+### 🏗️ Refaktorering
+- `app.js` (16 832 linjer) delt opp i 15 oversiktlige moduler under `js/`
+- Ubrukt skjelettkode fjernet (`functions/`, `dontknow/`, `dataconnect/`, `src/`, npm-filer)
+- Sidemenyen ryddet: dupliserte seksjoner og oppføringer slått sammen, utdaterte «NY»-merker fjernet
+
+### 🐛 Kritiske feilrettinger
+- **Service worker**: network-first med versjonert cache – brukere får nå alltid nyeste kode (hovedårsak til at gamle feil «aldri ble fikset»)
+- **Handleliste**: tomme varer i handlemodus/smart liste/opplesing (feil feltnavn) – fikset
+- **Timer**: `setTimerMinutes` manglet, hurtigtimer og talekommandoer krasjet – fikset
+- **Priser**: Kassal-API-svar feiltolket (0 kr på alt) + ingredienser priset tegn-for-tegn – fikset
+- **Utstyr**: bilder komprimeres nå (lagring feilet pga. Firestores 1 MB-grense); «Avbryt»-knappen fungerer
+- **Innstillinger**: ble lastet fra tilfeldig dokument i settings-samlingen – leser nå `user-settings`
+- **Manglende funksjoner**: `applyBudgetPlanToWeek` og `retryAnalysis` implementert
+- **Ultraprosessert-analyse**: krasjet på ingrediens-strenger – fikset
+
 ## v4.0.0 - Social Update 🎉
 **Released:** 2025
 

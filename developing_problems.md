@@ -58,21 +58,41 @@
 - **OpenAI (Betalt):** Krever OpenAI API-nøkkel
 - Uten API-nøkler vil AI-skanning ikke fungere. Hent gratis nøkkel fra Google AI Studio.
 
+## ✅ FIKSET (v5.0.0): Gammel kode ble servert fra cache – hovedårsaken til «fortsatt ødelagt»
+**Problem:** Service workeren brukte cache-first med et cachenavn som aldri ble oppdatert. Brukere fikk derfor GAMMEL JavaScript selv etter at feil var rettet og deployet. Dette forklarte at timer, bilderotasjon og handleliste «fortsatt» var ødelagt etter fikser.
+**Løsning:** Ny service worker (v5.0.0) med network-first for appens egne filer, versjonert cache, `skipWaiting`/`clients.claim`, og automatisk reload/varsel når ny versjon er klar.
+
+## ✅ FIKSET (v5.0.0): Tomme elementer i handlelisten
+**Problem:** Varer lagres som `{ text, checked }`, men handlemodus, smart handleliste, «fullfør handletur» og opplesing brukte `item.name || item` – navnet ble aldri funnet, så radene var tomme/ødelagte.
+**Løsning:** Alle visninger og operasjoner bruker nå `getItemName()`. Gamle ødelagte varer ryddes automatisk av `normalizeShoppingListItems()` ved innlasting.
+
+## ✅ FIKSET (v5.0.0): Timer på hjemskjermen sto på 00:00
+**Problem:** Hurtigtimeren og talekommandoer kalte `setTimerMinutes()` – en funksjon som ikke fantes (ReferenceError), så timeren startet aldri ordentlig.
+**Løsning:** `setTimerMinutes()` er implementert (js/06-shopping-timer.js). Den flytende timeren oppdateres av samme ticker som modal-timeren.
+
+## ✅ FIKSET (v5.0.0): Prisestimat viste 0 / meningsløse tall
+**Problem:** Kassal-API-et kan returnere `current_price` som tall eller objekt – koden antok alltid objekt og fikk `undefined` → 0. I tillegg itererte `estimateRecipeCost`/`showPriceComparison` over ingrediens-STRENGEN tegn for tegn.
+**Løsning:** Ny `getKassalPrice()`-hjelper håndterer begge formater, og alle kostnadsfunksjoner deler nå ingrediensteksten i linjer før estimering.
+
+## ✅ FIKSET (v5.0.0): Kunne ikke legge til utstyr
+**Problem:** (1) Utstyrsbilder ble lagret ukomprimert som base64 – mobilbilder overskred Firestores 1 MB-grense slik at lagring alltid feilet. (2) «Avbryt»-knappen lukket feil modal og virket død.
+**Løsning:** Bilder komprimeres nå (maks ~700 KB), og `closeModal()` lukker begge modaltyper.
+
+## ✅ FIKSET (v5.0.0): Bilderotasjon lagres permanent
+Rotasjon lagres i `recipe.imageRotations` i Firestore og brukes både i bildeviseren og på oppskriftssiden. (Koden fantes, men nådde aldri brukerne pga. cache-problemet over.)
+
+## ✅ FIKSET (v5.0.0): Innstillinger ble lastet tilfeldig
+**Problem:** `loadAllData` leste `settings[0]` – som kunne være handlelisten eller ukeplanen i stedet for brukerinnstillingene.
+**Løsning:** Leser nå eksplisitt dokumentet `user-settings`.
+
+## ✅ FIKSET (v5.0.0): Manglende funksjoner
+`applyBudgetPlanToWeek()` (budsjettplan → ukemeny) og `retryAnalysis()` (AI-skanner «Prøv igjen») fantes ikke og er nå implementert.
+
+## 🏗️ REFAKTORERT (v5.0.0)
+- `app.js` (16 832 linjer) er delt opp i 15 moduler under `js/` (lastes i rekkefølge, samme globale funksjoner som før).
+- Ubrukt skjelettkode fjernet: `functions/`, `dontknow/`, `dataconnect/`, `src/`, `node_modules/`, `package.json`.
+- Sidemenyen ryddet: duplikatseksjoner slått sammen, dupliserte oppføringer og utdaterte «NY»-merker fjernet.
+
 ---
-*Sist oppdatert: Februar 2026*
-
-
-
-Fikse legg i handlekurv fra oppskrift. Hvis man da etter å lagt i handlekurv sjekker handlekurven, så er det bare tomme ting i handlelisten uten noen tekst. Bare tomt, men det er f.eks 42 ting i handlelisten, men det står ikke noe på hver av de tingene i handlelisten. 
-
-Hvis man endrer rotasjon på bilde, så må det bli lagret på selve oppskrift siden også, ikke bare midlertidig. 
-
-
-Problemer med prisestimat. Står bare 0 på alt`. Problemer med api sikkert.
-
-
-Fortsatt problemer med timer funksjon. Timeren starter der jeg velger tidspunkt, men den timeren som ligger på f.eks hjemskjermen oppdaterer seg ikke. Den står bare på 00.00 hele tiden.
-
-
-Problemer med å legge til utstyr.
+*Sist oppdatert: 10. juni 2026 (v5.0.0)*
 
